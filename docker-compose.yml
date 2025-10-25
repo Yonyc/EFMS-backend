@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: efms
+      POSTGRES_USER: efms
+      POSTGRES_PASSWORD: secretpassword
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  efms:
+    image: your-org/efms:latest
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
