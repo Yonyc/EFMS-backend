@@ -21,6 +21,15 @@ public class User {
     @OneToMany(mappedBy = "user")
     private Set<FarmUser> farmUsers = new HashSet<>();
 
+    // authentication fields
+    @Column(unique = true)
+    private String username;
+
+    private String password;
+
+    @OneToMany(mappedBy = "owner")
+    private Set<Farm> ownedFarms = new HashSet<>();
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -32,4 +41,13 @@ public class User {
 
     public Set<FarmUser> getFarmUsers() { return farmUsers; }
     public void setFarmUsers(Set<FarmUser> farmUsers) { this.farmUsers = farmUsers; }
+
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+
+    public Set<Farm> getOwnedFarms() { return ownedFarms; }
+    public void setOwnedFarms(Set<Farm> ownedFarms) { this.ownedFarms = ownedFarms; }
 }

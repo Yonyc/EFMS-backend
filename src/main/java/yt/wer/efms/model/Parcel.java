@@ -1,6 +1,7 @@
 package yt.wer.efms.model;
 
 import jakarta.persistence.*;
+import org.locationtech.jts.geom.Geometry;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -28,8 +29,9 @@ public class Parcel {
     @Column(name = "end_validity")
     private LocalDateTime endValidity;
 
-    // geometry/polygon: mapped as WKT string for now
-    private String geodata;
+    // PostGIS geometry column
+    @Column(columnDefinition = "geometry")
+    private Geometry geodata;
 
     private String color;
 
@@ -69,8 +71,8 @@ public class Parcel {
     public LocalDateTime getEndValidity() { return endValidity; }
     public void setEndValidity(LocalDateTime endValidity) { this.endValidity = endValidity; }
 
-    public String getGeodata() { return geodata; }
-    public void setGeodata(String geodata) { this.geodata = geodata; }
+    public Geometry getGeodata() { return geodata; }
+    public void setGeodata(Geometry geodata) { this.geodata = geodata; }
 
     public String getColor() { return color; }
     public void setColor(String color) { this.color = color; }

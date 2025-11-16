@@ -1,15 +1,21 @@
 version: '3.8'
 services:
   postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.3
+    container_name: efms-postgres
     environment:
-      POSTGRES_DB: efms
-      POSTGRES_USER: efms
-      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   efms:
     image: your-org/efms:latest

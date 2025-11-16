@@ -16,7 +16,7 @@ public class FarmUser {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("userId")
-    @JoinColumn(name = "user")
+    @JoinColumn(name = "\"user\"")
     private User user;
 
     @Enumerated(EnumType.STRING)

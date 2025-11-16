@@ -1,6 +1,7 @@
 package yt.wer.efms.model;
 
 import jakarta.persistence.*;
+import org.locationtech.jts.geom.Geometry;
 import java.time.LocalDateTime;
 
 @Entity
@@ -18,8 +19,20 @@ public class ImportedParcel {
 
     private LocalDateTime date;
 
-    // geometry/polygon: mapped as text
-    private String geodata;
+    // PostGIS geometry column
+    @Column(columnDefinition = "geometry")
+    private Geometry geodata;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "validation_status")
+    private ValidationStatus validationStatus = ValidationStatus.PENDING;
+
+    @Column(name = "validation_notes")
+    private String validationNotes;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "import_id")
+    private ImportRecord importRecord;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parcel")
@@ -37,8 +50,17 @@ public class ImportedParcel {
     public LocalDateTime getDate() { return date; }
     public void setDate(LocalDateTime date) { this.date = date; }
 
-    public String getGeodata() { return geodata; }
-    public void setGeodata(String geodata) { this.geodata = geodata; }
+    public Geometry getGeodata() { return geodata; }
+    public void setGeodata(Geometry geodata) { this.geodata = geodata; }
+
+    public ValidationStatus getValidationStatus() { return validationStatus; }
+    public void setValidationStatus(ValidationStatus validationStatus) { this.validationStatus = validationStatus; }
+
+    public String getValidationNotes() { return validationNotes; }
+    public void setValidationNotes(String validationNotes) { this.validationNotes = validationNotes; }
+
+    public ImportRecord getImportRecord() { return importRecord; }
+    public void setImportRecord(ImportRecord importRecord) { this.importRecord = importRecord; }
 
     public Parcel getParcel() { return parcel; }
     public void setParcel(Parcel parcel) { this.parcel = parcel; }
