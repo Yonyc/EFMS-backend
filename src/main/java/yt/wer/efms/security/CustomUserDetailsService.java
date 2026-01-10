@@ -11,6 +11,7 @@ import yt.wer.efms.repository.UserRepository;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Optional;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
@@ -22,8 +23,8 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findAll().stream().filter(u -> username.equals(u.getUsername())).findFirst()
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        User user = userOpt.orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
         Collection<GrantedAuthority> authorities = new ArrayList<>();
         // Simple role: every user is ROLE_USER. Extend as needed.

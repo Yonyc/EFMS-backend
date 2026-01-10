@@ -30,6 +30,13 @@ public class User {
     @OneToMany(mappedBy = "owner")
     private Set<Farm> ownedFarms = new HashSet<>();
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tutorial_state", nullable = false, columnDefinition = "varchar(50) default 'NOT_STARTED'")
+    private TutorialState tutorialState = TutorialState.NOT_STARTED;
+
+    @Column(name = "operations_popup_top_right", nullable = false, columnDefinition = "boolean default false")
+    private boolean operationsPopupTopRight = false;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -50,4 +57,17 @@ public class User {
 
     public Set<Farm> getOwnedFarms() { return ownedFarms; }
     public void setOwnedFarms(Set<Farm> ownedFarms) { this.ownedFarms = ownedFarms; }
+
+    public TutorialState getTutorialState() { return tutorialState; }
+    public void setTutorialState(TutorialState tutorialState) { this.tutorialState = tutorialState; }
+
+    public boolean isOperationsPopupTopRight() { return operationsPopupTopRight; }
+    public void setOperationsPopupTopRight(boolean operationsPopupTopRight) { this.operationsPopupTopRight = operationsPopupTopRight; }
+
+    @PrePersist
+    public void prePersist() {
+        if (tutorialState == null) {
+            tutorialState = TutorialState.NOT_STARTED;
+        }
+    }
 }

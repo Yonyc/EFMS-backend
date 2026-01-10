@@ -9,8 +9,10 @@ import yt.wer.efms.dto.RegisterRequest;
 import yt.wer.efms.model.User;
 import yt.wer.efms.repository.UserRepository;
 import yt.wer.efms.security.JwtUtil;
+import yt.wer.efms.model.TutorialState;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/auth")
@@ -27,7 +29,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
-        if (userRepository.findAll().stream().anyMatch(u -> req.getUsername().equals(u.getUsername()))) {
+        if (userRepository.findByUsername(req.getUsername()).isPresent()) {
             return ResponseEntity.badRequest().body("username_taken");
         }
         User u = new User();
@@ -35,16 +37,19 @@ public class AuthController {
         u.setPassword(passwordEncoder.encode(req.getPassword()));
         u.setCreatedAt(LocalDateTime.now());
         u.setModifiedAt(LocalDateTime.now());
+        u.setTutorialState(TutorialState.NOT_STARTED);
         userRepository.save(u);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody AuthRequest req) {
-        User u = userRepository.findAll().stream().filter(x -> req.getUsername().equals(x.getUsername())).findFirst().orElse(null);
-        if (u == null) return ResponseEntity.status(401).body("invalid_credentials");
+        Optional<User> userOpt = userRepository.findByUsername(req.getUsername());
+        if (userOpt.isEmpty()) return ResponseEntity.status(401).body("invalid_credentials");
+
+        User u = userOpt.get();
         if (!passwordEncoder.matches(req.getPassword(), u.getPassword())) return ResponseEntity.status(401).body("invalid_credentials");
         String token = jwtUtil.generateToken(u.getUsername());
-        return ResponseEntity.ok(new AuthResponse(token, u.getId()));
+        return ResponseEntity.ok(new AuthResponse(token, u.getId(), u.getTutorialState(), u.isOperationsPopupTopRight()));
     }
 }
