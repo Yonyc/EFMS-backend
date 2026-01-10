@@ -50,6 +50,6 @@ public class AuthController {
         User u = userOpt.get();
         if (!passwordEncoder.matches(req.getPassword(), u.getPassword())) return ResponseEntity.status(401).body("invalid_credentials");
         String token = jwtUtil.generateToken(u.getUsername());
-        return ResponseEntity.ok(new AuthResponse(token, u.getId(), u.getTutorialState(), u.isOperationsPopupTopRight()));
+        return ResponseEntity.ok(new AuthResponse(token, u.getId(), u.getTutorialState(), u.isOperationsPopupTopRight(), u.getEmail(), u.getAvatarUrl()));
     }
 }

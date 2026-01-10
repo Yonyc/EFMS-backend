@@ -34,3 +34,4 @@ build/
 
 .env
 export_pac/
+uploads/

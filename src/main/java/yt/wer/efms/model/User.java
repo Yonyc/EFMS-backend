@@ -30,12 +30,18 @@ public class User {
     @OneToMany(mappedBy = "owner")
     private Set<Farm> ownedFarms = new HashSet<>();
 
+    @Column(name = "email")
+    private String email;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "tutorial_state", nullable = false, columnDefinition = "varchar(50) default 'NOT_STARTED'")
     private TutorialState tutorialState = TutorialState.NOT_STARTED;
 
     @Column(name = "operations_popup_top_right", nullable = false, columnDefinition = "boolean default false")
     private boolean operationsPopupTopRight = false;
+
+    @Column(name = "avatar_url")
+    private String avatarUrl;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -55,6 +61,9 @@ public class User {
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
 
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
     public Set<Farm> getOwnedFarms() { return ownedFarms; }
     public void setOwnedFarms(Set<Farm> ownedFarms) { this.ownedFarms = ownedFarms; }
 
@@ -63,6 +72,9 @@ public class User {
 
     public boolean isOperationsPopupTopRight() { return operationsPopupTopRight; }
     public void setOperationsPopupTopRight(boolean operationsPopupTopRight) { this.operationsPopupTopRight = operationsPopupTopRight; }
+
+    public String getAvatarUrl() { return avatarUrl; }
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
 
     @PrePersist
     public void prePersist() {
