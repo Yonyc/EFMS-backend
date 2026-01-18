@@ -25,6 +25,11 @@ public class FarmController {
         return farmService.listAll();
     }
 
+    @GetMapping("/public")
+    public List<FarmDto> listPublic() {
+        return farmService.listPublic();
+    }
+
     @GetMapping("/my-farms")
     public ResponseEntity<List<FarmDto>> getMyFarms(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -42,13 +47,13 @@ public class FarmController {
 
     @PostMapping
     public ResponseEntity<FarmDto> create(@RequestBody FarmDto input) {
-        FarmDto created = farmService.create(input.getName());
+        FarmDto created = farmService.create(input.getName(), input.getDescription(), input.getLocation(), input.getIsPublic(), input.getShowName(), input.getShowDescription(), input.getShowLocation());
         return ResponseEntity.created(URI.create("/farm/" + created.getId())).body(created);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<FarmDto> update(@PathVariable Long id, @RequestBody FarmDto input) {
-        return farmService.update(id, input.getName()).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        return farmService.update(id, input).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")

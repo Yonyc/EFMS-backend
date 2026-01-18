@@ -42,21 +42,21 @@ public class FarmService {
 
     public List<FarmDto> listAll() {
         return farmRepository.findAll().stream()
-                .map(f -> new FarmDto(f.getId(), f.getName(), f.getCreatedAt(), f.getModifiedAt()))
+                .map(this::toFarmDto)
                 .collect(Collectors.toList());
     }
 
     public List<FarmDto> listUserFarms(String username) {
         return farmRepository.findByOwnerUsername(username).stream()
-                .map(f -> new FarmDto(f.getId(), f.getName(), f.getCreatedAt(), f.getModifiedAt()))
+                .map(this::toFarmDto)
                 .collect(Collectors.toList());
     }
 
     public Optional<FarmDto> findById(Long id) {
-        return farmRepository.findById(id).map(f -> new FarmDto(f.getId(), f.getName(), f.getCreatedAt(), f.getModifiedAt()));
+        return farmRepository.findById(id).map(this::toFarmDto);
     }
 
-    public FarmDto create(String name) {
+    public FarmDto create(String name, String description, String location, Boolean isPublic, Boolean showName, Boolean showDescription, Boolean showLocation) {
         // Require authentication
         final String username;
         try {
@@ -71,6 +71,12 @@ public class FarmService {
 
         Farm farm = new Farm();
         farm.setName(name);
+        farm.setDescription(description);
+        farm.setLocation(location);
+        farm.setIsPublic(isPublic != null ? isPublic : false);
+        farm.setShowName(showName != null ? showName : true);
+        farm.setShowDescription(showDescription != null ? showDescription : true);
+        farm.setShowLocation(showLocation != null ? showLocation : true);
         farm.setCreatedAt(LocalDateTime.now());
         farm.setModifiedAt(LocalDateTime.now());
 
@@ -81,15 +87,28 @@ public class FarmService {
                 .ifPresent(farm::setOwner);
 
         Farm saved = farmRepository.save(farm);
-        return new FarmDto(saved.getId(), saved.getName(), saved.getCreatedAt(), saved.getModifiedAt());
+        return toFarmDto(saved);
     }
 
-    public Optional<FarmDto> update(Long id, String name) {
+    public List<FarmDto> listPublic() {
+        return farmRepository.findByIsPublicTrue().stream()
+                .map(this::toFarmDto)
+                .map(this::maskByVisibility)
+                .collect(Collectors.toList());
+    }
+
+    public Optional<FarmDto> update(Long id, FarmDto input) {
         return farmRepository.findById(id).map(f -> {
-            f.setName(name);
+            if (input.getName() != null) f.setName(input.getName());
+            if (input.getDescription() != null) f.setDescription(input.getDescription());
+            if (input.getLocation() != null) f.setLocation(input.getLocation());
+            if (input.getIsPublic() != null) f.setIsPublic(input.getIsPublic());
+            if (input.getShowName() != null) f.setShowName(input.getShowName());
+            if (input.getShowDescription() != null) f.setShowDescription(input.getShowDescription());
+            if (input.getShowLocation() != null) f.setShowLocation(input.getShowLocation());
             f.setModifiedAt(LocalDateTime.now());
             Farm s = farmRepository.save(f);
-            return new FarmDto(s.getId(), s.getName(), s.getCreatedAt(), s.getModifiedAt());
+            return toFarmDto(s);
         });
     }
 
@@ -283,6 +302,28 @@ public class FarmService {
         if (p.getCorrespondingPac() != null) {
             dto.setCorrespondingPacId(p.getCorrespondingPac().getId());
         }
+        return dto;
+    }
+
+    private FarmDto toFarmDto(Farm f) {
+        return new FarmDto(
+                f.getId(),
+                f.getName(),
+                f.getDescription(),
+                f.getLocation(),
+                f.getIsPublic(),
+                f.getShowName(),
+                f.getShowDescription(),
+                f.getShowLocation(),
+                f.getCreatedAt(),
+                f.getModifiedAt()
+        );
+    }
+
+    private FarmDto maskByVisibility(FarmDto dto) {
+        if (dto.getShowName() != null && !dto.getShowName()) dto.setName(null);
+        if (dto.getShowDescription() != null && !dto.getShowDescription()) dto.setDescription(null);
+        if (dto.getShowLocation() != null && !dto.getShowLocation()) dto.setLocation(null);
         return dto;
     }
 }

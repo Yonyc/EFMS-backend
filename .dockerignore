@@ -1,10 +1,48 @@
+# Build output
 target/
+!target/*.jar
+
+# Git
 .git/
 .gitignore
+.gitattributes
+
+# Documentation
 *.md
+notes.md
+
+# Environment files
 .env
+.env.*
+
+# IDE
 .vscode/
 .idea/
 *.iml
+*.swp
+
+*.swo
+**~
+
+# System files
 .DS_Store
+
+# Logs
 *.log
+logs/
+
+# Docker files
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Project specific
+*.qgz
+export_pac/
+EFMS.sql
+launch.sh
+
+# Maven wrapper (uncomment if you want to use system Maven)
+# .mvn/
+# mvnw
+# mvnw.cmd

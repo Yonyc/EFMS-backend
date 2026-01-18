@@ -20,6 +20,24 @@ public class Farm {
 
     private String name;
 
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    private String location;
+
+    @Column(name = "is_public")
+    private Boolean isPublic = false;
+
+    // field-level visibility preferences
+    @Column(name = "show_name")
+    private Boolean showName = true;
+
+    @Column(name = "show_description")
+    private Boolean showDescription = true;
+
+    @Column(name = "show_location")
+    private Boolean showLocation = true;
+
     @OneToMany(mappedBy = "farm")
     private Set<Parcel> parcels = new HashSet<>();
 
@@ -40,6 +58,24 @@ public class Farm {
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public String getLocation() { return location; }
+    public void setLocation(String location) { this.location = location; }
+
+    public Boolean getIsPublic() { return isPublic; }
+    public void setIsPublic(Boolean isPublic) { this.isPublic = isPublic; }
+
+    public Boolean getShowName() { return showName; }
+    public void setShowName(Boolean showName) { this.showName = showName; }
+
+    public Boolean getShowDescription() { return showDescription; }
+    public void setShowDescription(Boolean showDescription) { this.showDescription = showDescription; }
+
+    public Boolean getShowLocation() { return showLocation; }
+    public void setShowLocation(Boolean showLocation) { this.showLocation = showLocation; }
 
     public Set<Parcel> getParcels() { return parcels; }
     public void setParcels(Set<Parcel> parcels) { this.parcels = parcels; }
