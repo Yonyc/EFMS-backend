@@ -8,7 +8,7 @@ public class ImportedParcelDto {
     private Long id;
     private LocalDateTime createdAt;
     private LocalDateTime date;
-    private String geodataWkt; // WKT representation for easy consumption
+    private String geodata; // WKT representation for easy consumption
     private ValidationStatus validationStatus;
     private String validationNotes;
     private Long importRecordId;
@@ -25,8 +25,8 @@ public class ImportedParcelDto {
     public LocalDateTime getDate() { return date; }
     public void setDate(LocalDateTime date) { this.date = date; }
 
-    public String getGeodataWkt() { return geodataWkt; }
-    public void setGeodataWkt(String geodataWkt) { this.geodataWkt = geodataWkt; }
+    public String getGeodata() { return geodata; }
+    public void setGeodata(String geodata) { this.geodata = geodata; }
 
     public ValidationStatus getValidationStatus() { return validationStatus; }
     public void setValidationStatus(ValidationStatus validationStatus) { this.validationStatus = validationStatus; }

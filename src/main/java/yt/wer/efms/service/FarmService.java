@@ -106,6 +106,32 @@ public class FarmService {
         // otherwise ignore or throw - for now we silently ignore if not owner
     }
 
+    public boolean deleteParcel(Long parcelId) {
+        String username = null;
+        try { username = SecurityContextHolder.getContext().getAuthentication().getName(); } catch (Exception ignored) {}
+
+        Optional<Parcel> parcelOpt = parcelRepository.findById(parcelId);
+        if (parcelOpt.isEmpty()) {
+            return false;
+        }
+
+        Parcel parcel = parcelOpt.get();
+        Farm farm = parcel.getFarm();
+        if (farm != null && farm.getOwner() != null && username != null && !username.equals(farm.getOwner().getUsername())) {
+            throw new RuntimeException("You can only delete parcels from your own farms");
+        }
+
+        ImportedParcel importedParcel = parcel.getCorrespondingPac();
+        if (importedParcel != null) {
+            importedParcel.setParcel(null);
+            importedParcel.setModifiedAt(LocalDateTime.now());
+            importedParcelRepository.save(importedParcel);
+        }
+
+        parcelRepository.delete(parcel);
+        return true;
+    }
+
     public List<ParcelDto> listParcels(Long farmId) {
         List<Parcel> parcels = parcelRepository.findByFarmId(farmId);
         return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());

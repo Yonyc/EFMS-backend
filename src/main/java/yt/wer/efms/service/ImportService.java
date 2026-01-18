@@ -5,8 +5,15 @@ import org.geotools.data.FileDataStoreFinder;
 import org.geotools.data.simple.SimpleFeatureCollection;
 import org.geotools.data.simple.SimpleFeatureIterator;
 import org.geotools.data.simple.SimpleFeatureSource;
+import org.geotools.geometry.jts.JTS;
+import org.geotools.referencing.CRS;
+import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.locationtech.jts.geom.Geometry;
 import org.opengis.feature.simple.SimpleFeature;
+import org.opengis.referencing.FactoryException;
+import org.opengis.referencing.crs.CoordinateReferenceSystem;
+import org.opengis.referencing.operation.MathTransform;
+import org.opengis.referencing.operation.TransformException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +71,7 @@ public class ImportService {
             // 4. Create ImportRecord
             ImportRecord importRecord = new ImportRecord();
             importRecord.setFilename(zipFile.getOriginalFilename());
+            importRecord.setName(zipFile.getOriginalFilename());
             importRecord.setCreatedAt(LocalDateTime.now());
             importRecord.setUser(user);
             importRecord = importRecordRepository.save(importRecord);
@@ -74,6 +82,8 @@ public class ImportService {
             try {
                 SimpleFeatureSource featureSource = dataStore.getFeatureSource();
                 SimpleFeatureCollection features = featureSource.getFeatures();
+                CoordinateReferenceSystem sourceCrs = featureSource.getInfo().getCRS();
+                MathTransform transform = buildTransformToWgs84(sourceCrs);
                 
                 try (SimpleFeatureIterator iterator = features.features()) {
                     while (iterator.hasNext()) {
@@ -81,6 +91,16 @@ public class ImportService {
                         Object geomObj = feature.getDefaultGeometry();
                         if (geomObj instanceof Geometry) {
                             Geometry geom = (Geometry) geomObj;
+                            if (transform != null) {
+                                try {
+                                    geom = JTS.transform(geom, transform);
+                                    geom.setSRID(4326);
+                                } catch (TransformException te) {
+                                    throw new RuntimeException("Failed to transform geometry to WGS84", te);
+                                }
+                            } else {
+                                geom.setSRID(4326);
+                            }
                             ImportedParcel parcel = new ImportedParcel();
                             parcel.setGeodata(geom);
                             parcel.setImportRecord(importRecord);
@@ -101,6 +121,20 @@ public class ImportService {
         } finally {
             // 6. Clean up temporary directory
             deleteDirectory(tempDir.toFile());
+        }
+    }
+
+    private MathTransform buildTransformToWgs84(CoordinateReferenceSystem sourceCrs) {
+        if (sourceCrs == null) {
+            return null;
+        }
+        try {
+            if (CRS.equalsIgnoreMetadata(sourceCrs, DefaultGeographicCRS.WGS84)) {
+                return null;
+            }
+            return CRS.findMathTransform(sourceCrs, DefaultGeographicCRS.WGS84, true);
+        } catch (FactoryException e) {
+            throw new RuntimeException("Unable to prepare CRS transform to WGS84", e);
         }
     }
 

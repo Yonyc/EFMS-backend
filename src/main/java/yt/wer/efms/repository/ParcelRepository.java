@@ -10,4 +10,8 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long> {
 
 	// find parcels by farm id
 	List<Parcel> findByFarmId(Long farmId);
+
+	Parcel findByCorrespondingPacId(Long importedParcelId);
+
+	List<Parcel> findByCorrespondingPacImportRecordId(Long importRecordId);
 }

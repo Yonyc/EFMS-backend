@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 public class ImportRecordDto {
     private Long id;
     private String filename;
+    private String name;
     private LocalDateTime createdAt;
     private String username;
     private Integer totalParcels;
@@ -20,6 +21,9 @@ public class ImportRecordDto {
 
     public String getFilename() { return filename; }
     public void setFilename(String filename) { this.filename = filename; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

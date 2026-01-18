@@ -29,4 +29,11 @@ public class ParcelController {
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
+
+    // Delete a parcel by ID
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteParcel(@PathVariable Long id) {
+        boolean deleted = farmService.deleteParcel(id);
+        return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+    }
 }

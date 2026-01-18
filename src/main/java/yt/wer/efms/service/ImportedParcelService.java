@@ -1,13 +1,13 @@
 package yt.wer.efms.service;
 
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.io.ParseException;
+import org.locationtech.jts.io.WKTReader;
 import org.locationtech.jts.io.WKTWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import yt.wer.efms.dto.ConvertParcelRequest;
-import yt.wer.efms.dto.ImportRecordDto;
-import yt.wer.efms.dto.ImportedParcelDto;
-import yt.wer.efms.dto.ValidateParcelRequest;
+import yt.wer.efms.dto.*;
 import yt.wer.efms.model.*;
 import yt.wer.efms.repository.*;
 
@@ -30,6 +30,7 @@ public class ImportedParcelService {
     @Autowired
     private FarmRepository farmRepository;
 
+    private final WKTReader wktReader = new WKTReader();
     private final WKTWriter wktWriter = new WKTWriter();
 
     // Get all imports for a user
@@ -77,14 +78,68 @@ public class ImportedParcelService {
             throw new RuntimeException("Unauthorized access to parcel");
         }
 
-        // Don't allow changing status if already converted
-        if (parcel.getValidationStatus() == ValidationStatus.CONVERTED) {
-            throw new RuntimeException("Cannot modify converted parcel");
+        ValidationStatus requestedStatus = request.getValidationStatus();
+
+        // Block updates if parcel already materialized, but allow idempotent approve/convert calls
+        if (parcel.getValidationStatus() == ValidationStatus.CONVERTED || parcel.getParcel() != null) {
+            boolean requestingMaterialized = requestedStatus == ValidationStatus.APPROVED || requestedStatus == ValidationStatus.CONVERTED;
+            boolean notesUnchanged = request.getValidationNotes() == null || request.getValidationNotes().equals(parcel.getValidationNotes());
+            if (requestingMaterialized && notesUnchanged) {
+                return toImportedParcelDto(parcel);
+            }
+            throw new RuntimeException("Cannot modify a parcel that has already been materialized");
         }
 
-        parcel.setValidationStatus(request.getValidationStatus());
         parcel.setValidationNotes(request.getValidationNotes());
         parcel.setModifiedAt(LocalDateTime.now());
+
+        if (requestedStatus == ValidationStatus.APPROVED) {
+            Parcel existingParcel = parcelRepository.findByCorrespondingPacId(parcel.getId());
+            if (existingParcel != null) {
+                parcel.setParcel(existingParcel);
+                parcel.setValidationStatus(ValidationStatus.APPROVED);
+                ImportedParcel saved = importedParcelRepository.save(parcel);
+                return toImportedParcelDto(saved);
+            }
+
+            Farm farm = null;
+            Long farmId = request.getFarmId();
+            if (farmId != null) {
+                farm = farmRepository.findById(farmId)
+                        .orElseThrow(() -> new RuntimeException("Farm not found"));
+                if (!farm.getOwner().getUsername().equals(username)) {
+                    throw new RuntimeException("You can only add parcels to your own farms");
+                }
+            } else {
+                List<Farm> farms = farmRepository.findByOwnerUsername(username);
+                if (farms.size() == 1) {
+                    farm = farms.get(0);
+                } else if (farms.isEmpty()) {
+                    throw new RuntimeException("No farm available to attach the parcel");
+                } else {
+                    throw new RuntimeException("Farm id is required when multiple farms exist");
+                }
+            }
+
+            // Auto-create a Parcel mirroring the imported geometry
+            Parcel newParcel = new Parcel();
+            newParcel.setName("Imported Parcel " + parcel.getId());
+            newParcel.setFarm(farm);
+            newParcel.setActive(true);
+            newParcel.setStartValidity(LocalDateTime.now());
+            newParcel.setCreatedAt(LocalDateTime.now());
+            newParcel.setColor("#4CAF50");
+            newParcel.setCorrespondingPac(parcel);
+            if (parcel.getGeodata() != null) {
+                newParcel.setGeodata(parcel.getGeodata());
+            }
+            Parcel savedParcel = parcelRepository.save(newParcel);
+
+            parcel.setParcel(savedParcel);
+            parcel.setValidationStatus(ValidationStatus.APPROVED);
+        } else {
+            parcel.setValidationStatus(requestedStatus);
+        }
 
         ImportedParcel saved = importedParcelRepository.save(parcel);
         return toImportedParcelDto(saved);
@@ -107,7 +162,7 @@ public class ImportedParcelService {
         }
 
         // Check if already converted
-        if (importedParcel.getValidationStatus() == ValidationStatus.CONVERTED) {
+        if (importedParcel.getValidationStatus() == ValidationStatus.CONVERTED || importedParcel.getParcel() != null) {
             throw new RuntimeException("Parcel already converted");
         }
 
@@ -145,6 +200,133 @@ public class ImportedParcelService {
         return toImportedParcelDto(updated);
     }
 
+    @Transactional
+    public ImportedParcelDto updateImportedParcel(Long parcelId, UpdateImportedParcelRequest request, String username) {
+        ImportedParcel parcel = importedParcelRepository.findById(parcelId)
+                .orElseThrow(() -> new RuntimeException("Imported parcel not found"));
+
+        if (!parcel.getImportRecord().getUser().getUsername().equals(username)) {
+            throw new RuntimeException("Unauthorized access to parcel");
+        }
+
+        if (parcel.getValidationStatus() == ValidationStatus.CONVERTED || parcel.getParcel() != null) {
+            throw new RuntimeException("Cannot modify converted parcel");
+        }
+
+        if (request.getGeodata() != null && !request.getGeodata().isBlank()) {
+            try {
+                Geometry geometry = wktReader.read(request.getGeodata());
+                parcel.setGeodata(geometry);
+            } catch (ParseException e) {
+                throw new RuntimeException("Invalid geometry payload: " + e.getMessage());
+            }
+        }
+
+        parcel.setValidationNotes(request.getValidationNotes());
+        parcel.setModifiedAt(LocalDateTime.now());
+
+        ImportedParcel saved = importedParcelRepository.save(parcel);
+        return toImportedParcelDto(saved);
+    }
+
+    @Transactional
+    public AssignImportResponse assignImportToFarm(Long importId, AssignImportRequest request, String username) {
+        ImportRecord importRecord = importRecordRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Import not found"));
+
+        if (!importRecord.getUser().getUsername().equals(username)) {
+            throw new RuntimeException("Unauthorized access to import");
+        }
+
+        Farm farm = farmRepository.findById(request.getFarmId())
+                .orElseThrow(() -> new RuntimeException("Farm not found"));
+
+        if (!farm.getOwner().getUsername().equals(username)) {
+            throw new RuntimeException("You can only assign imports to your own farms");
+        }
+
+        List<ImportedParcel> parcels = importedParcelRepository.findByImportRecordId(importId);
+        boolean approvedOnly = request.getConvertOnlyApproved() == null || request.getConvertOnlyApproved();
+        String prefix = (request.getParcelNamePrefix() == null || request.getParcelNamePrefix().isBlank())
+                ? "Imported Parcel"
+                : request.getParcelNamePrefix();
+        String defaultColor = (request.getDefaultColor() == null || request.getDefaultColor().isBlank())
+                ? "#4CAF50"
+                : request.getDefaultColor();
+
+        int convertedCount = 0;
+        int skippedCount = 0;
+        int sequence = 1;
+
+        for (ImportedParcel importedParcel : parcels) {
+            boolean alreadyConverted = importedParcel.getValidationStatus() == ValidationStatus.CONVERTED;
+            boolean notApproved = importedParcel.getValidationStatus() != ValidationStatus.APPROVED;
+
+            if (alreadyConverted || (approvedOnly && notApproved)) {
+                skippedCount++;
+                continue;
+            }
+
+            Parcel newParcel = new Parcel();
+            newParcel.setName(prefix + " " + sequence++);
+            newParcel.setFarm(farm);
+            newParcel.setColor(defaultColor);
+            newParcel.setActive(true);
+            newParcel.setStartValidity(LocalDateTime.now());
+            newParcel.setCreatedAt(LocalDateTime.now());
+            newParcel.setCorrespondingPac(importedParcel);
+            if (importedParcel.getGeodata() != null) {
+                newParcel.setGeodata(importedParcel.getGeodata());
+            }
+
+            Parcel savedParcel = parcelRepository.save(newParcel);
+
+            importedParcel.setValidationStatus(ValidationStatus.CONVERTED);
+            importedParcel.setParcel(savedParcel);
+            importedParcel.setModifiedAt(LocalDateTime.now());
+            importedParcelRepository.save(importedParcel);
+            convertedCount++;
+        }
+
+        return new AssignImportResponse(importId, farm.getId(), convertedCount, skippedCount);
+    }
+
+    @Transactional
+    public ImportRecordDto renameImport(Long importId, String username, String name) {
+        ImportRecord importRecord = importRecordRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Import not found"));
+
+        if (!importRecord.getUser().getUsername().equals(username)) {
+            throw new RuntimeException("Unauthorized access to import");
+        }
+
+        String cleanedName = (name == null || name.isBlank()) ? importRecord.getFilename() : name.trim();
+        importRecord.setName(cleanedName);
+        importRecordRepository.save(importRecord);
+
+        return toImportRecordDto(importRecord);
+    }
+
+    @Transactional
+    public void deleteImport(Long importId, String username) {
+        ImportRecord importRecord = importRecordRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Import not found"));
+
+        if (!importRecord.getUser().getUsername().equals(username)) {
+            throw new RuntimeException("Unauthorized access to import");
+        }
+
+        // Detach created parcels so the import can be removed without FK issues
+        List<Parcel> parcels = parcelRepository.findByCorrespondingPacImportRecordId(importId);
+        for (Parcel parcel : parcels) {
+            parcel.setCorrespondingPac(null);
+            parcelRepository.save(parcel);
+        }
+
+        importedParcelRepository.deleteByImportRecordId(importId);
+        importRecordRepository.delete(importRecord);
+    }
+
     // Helper method to convert entity to DTO
     private ImportedParcelDto toImportedParcelDto(ImportedParcel parcel) {
         ImportedParcelDto dto = new ImportedParcelDto();
@@ -166,9 +348,9 @@ public class ImportedParcelService {
         if (parcel.getGeodata() != null) {
             try {
                 String wkt = wktWriter.write(parcel.getGeodata());
-                dto.setGeodataWkt(wkt);
+                dto.setGeodata(wkt);
             } catch (Exception e) {
-                dto.setGeodataWkt(null);
+                dto.setGeodata(null);
             }
         }
 
@@ -179,6 +361,7 @@ public class ImportedParcelService {
         ImportRecordDto dto = new ImportRecordDto();
         dto.setId(record.getId());
         dto.setFilename(record.getFilename());
+        dto.setName(record.getName() != null ? record.getName() : record.getFilename());
         dto.setCreatedAt(record.getCreatedAt());
         if (record.getUser() != null) {
             dto.setUsername(record.getUser().getUsername());

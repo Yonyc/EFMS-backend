@@ -11,4 +11,6 @@ import java.util.List;
 public interface ImportedParcelRepository extends JpaRepository<ImportedParcel, Long> {
     List<ImportedParcel> findByImportRecordId(Long importRecordId);
     List<ImportedParcel> findByImportRecordIdAndValidationStatus(Long importRecordId, ValidationStatus status);
+    boolean existsByImportRecordIdAndValidationStatus(Long importRecordId, ValidationStatus status);
+    void deleteByImportRecordId(Long importRecordId);
 }
