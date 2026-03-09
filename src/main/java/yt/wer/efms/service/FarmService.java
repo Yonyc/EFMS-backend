@@ -11,13 +11,17 @@ import yt.wer.efms.dto.ParcelDto;
 import yt.wer.efms.model.Farm;
 import yt.wer.efms.model.ImportedParcel;
 import yt.wer.efms.model.Parcel;
+import yt.wer.efms.model.Period;
 import yt.wer.efms.repository.FarmRepository;
 import yt.wer.efms.repository.ImportedParcelRepository;
 import yt.wer.efms.repository.ParcelRepository;
+import yt.wer.efms.repository.PeriodRepository;
 import yt.wer.efms.repository.UserRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -29,15 +33,18 @@ public class FarmService {
     private final ParcelRepository parcelRepository;
     private final UserRepository userRepository;
     private final ImportedParcelRepository importedParcelRepository;
+    private final PeriodRepository periodRepository;
     private final WKTReader wktReader = new WKTReader();
     private final WKTWriter wktWriter = new WKTWriter();
 
     public FarmService(FarmRepository farmRepository, ParcelRepository parcelRepository, 
-                       UserRepository userRepository, ImportedParcelRepository importedParcelRepository) {
+                       UserRepository userRepository, ImportedParcelRepository importedParcelRepository,
+                       PeriodRepository periodRepository) {
         this.farmRepository = farmRepository;
         this.parcelRepository = parcelRepository;
         this.userRepository = userRepository;
         this.importedParcelRepository = importedParcelRepository;
+        this.periodRepository = periodRepository;
     }
 
     public List<FarmDto> listAll() {
@@ -156,6 +163,43 @@ public class FarmService {
         return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());
     }
 
+    public List<ParcelDto> searchParcels(Long farmId,
+                                         Long periodId,
+                                         Long toolId,
+                                         Long productId,
+                                         LocalDate startDate,
+                                         LocalDate endDate,
+                                         String polygonWkt,
+                                         Double minLat,
+                                         Double minLng,
+                                         Double maxLat,
+                                         Double maxLng) {
+        LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
+        LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
+
+        boolean hasBounds = minLat != null && minLng != null && maxLat != null && maxLng != null;
+        Double resolvedMinLat = hasBounds ? minLat : null;
+        Double resolvedMinLng = hasBounds ? minLng : null;
+        Double resolvedMaxLat = hasBounds ? maxLat : null;
+        Double resolvedMaxLng = hasBounds ? maxLng : null;
+
+        List<Parcel> parcels = parcelRepository.searchParcels(
+                farmId,
+            periodId,
+                toolId,
+                productId,
+                startDateTime,
+                endDateTime,
+            polygonWkt,
+                resolvedMinLng,
+                resolvedMinLat,
+                resolvedMaxLng,
+                resolvedMaxLat
+        );
+
+        return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());
+    }
+
     public ParcelDto createParcel(Long farmId, CreateParcelRequest request) {
         // Verify farm exists and user has permission
         Farm farm = farmRepository.findById(farmId)
@@ -196,6 +240,15 @@ public class FarmService {
         if (request.getCorrespondingPacId() != null) {
             importedParcelRepository.findById(request.getCorrespondingPacId())
                     .ifPresent(parcel::setCorrespondingPac);
+        }
+
+        if (request.getPeriodId() != null) {
+            Period period = periodRepository.findById(request.getPeriodId())
+                    .orElseThrow(() -> new RuntimeException("Period not found"));
+            if (period.getFarm() == null || !period.getFarm().getId().equals(farmId)) {
+                throw new RuntimeException("Period does not belong to this farm");
+            }
+            parcel.setPeriod(period);
         }
 
         Parcel saved = parcelRepository.save(parcel);
@@ -276,6 +329,15 @@ public class FarmService {
                         .ifPresent(parcel::setCorrespondingPac);
             }
 
+            if (request.getPeriodId() != null) {
+                Period period = periodRepository.findById(request.getPeriodId())
+                        .orElseThrow(() -> new RuntimeException("Period not found"));
+                if (period.getFarm() == null || !period.getFarm().getId().equals(farmId)) {
+                    throw new RuntimeException("Period does not belong to this farm");
+                }
+                parcel.setPeriod(period);
+            }
+
             Parcel saved = parcelRepository.save(parcel);
             return toParcelDto(saved);
         });
@@ -302,7 +364,76 @@ public class FarmService {
         if (p.getCorrespondingPac() != null) {
             dto.setCorrespondingPacId(p.getCorrespondingPac().getId());
         }
+        if (p.getPeriod() != null) {
+            dto.setPeriodId(p.getPeriod().getId());
+        }
         return dto;
+    }
+
+    public List<yt.wer.efms.dto.PeriodDto> listPeriods(Long farmId) {
+        return periodRepository.findByFarmId(farmId).stream()
+                .map(this::toPeriodDto)
+                .collect(Collectors.toList());
+    }
+
+    public yt.wer.efms.dto.PeriodDto createPeriod(Long farmId, yt.wer.efms.dto.CreatePeriodRequest request) {
+        Farm farm = farmRepository.findById(farmId)
+                .orElseThrow(() -> new RuntimeException("Farm not found"));
+
+        String username = null;
+        try {
+            username = SecurityContextHolder.getContext().getAuthentication().getName();
+        } catch (Exception ignored) {}
+
+        if (farm.getOwner() != null && username != null && !username.equals(farm.getOwner().getUsername())) {
+            throw new RuntimeException("You can only create periods for your own farms");
+        }
+
+        Period period = new Period();
+        period.setName(request.getName());
+        period.setStartDate(request.getStartDate());
+        period.setEndDate(request.getEndDate());
+        period.setFarm(farm);
+        period.setCreatedAt(LocalDateTime.now());
+        period.setModifiedAt(LocalDateTime.now());
+
+        Period saved = periodRepository.save(period);
+        return toPeriodDto(saved);
+    }
+
+    public Optional<yt.wer.efms.dto.PeriodDto> updatePeriod(Long farmId, Long periodId, yt.wer.efms.dto.CreatePeriodRequest request) {
+        Farm farm = farmRepository.findById(farmId)
+                .orElseThrow(() -> new RuntimeException("Farm not found"));
+
+        String username = null;
+        try {
+            username = SecurityContextHolder.getContext().getAuthentication().getName();
+        } catch (Exception ignored) {}
+
+        if (farm.getOwner() == null || username == null || !username.equals(farm.getOwner().getUsername())) {
+            throw new RuntimeException("You can only update periods for your own farms");
+        }
+
+        return periodRepository.findById(periodId).map(period -> {
+            if (period.getFarm() == null || !period.getFarm().getId().equals(farmId)) {
+                throw new RuntimeException("Period does not belong to this farm");
+            }
+            if (request.getName() != null) period.setName(request.getName());
+            if (request.getStartDate() != null) period.setStartDate(request.getStartDate());
+            if (request.getEndDate() != null) period.setEndDate(request.getEndDate());
+            period.setModifiedAt(LocalDateTime.now());
+            return toPeriodDto(periodRepository.save(period));
+        });
+    }
+
+    private yt.wer.efms.dto.PeriodDto toPeriodDto(Period period) {
+        return new yt.wer.efms.dto.PeriodDto(
+                period.getId(),
+                period.getName(),
+                period.getStartDate(),
+                period.getEndDate(),
+                period.getFarm() != null ? period.getFarm().getId() : null
+        );
     }
 
     private FarmDto toFarmDto(Farm f) {

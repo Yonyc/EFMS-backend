@@ -13,6 +13,7 @@ import yt.wer.efms.model.ValidationStatus;
 import yt.wer.efms.service.ImportService;
 import yt.wer.efms.service.ImportedParcelService;
 import yt.wer.efms.dto.UpdateImportRequest;
+import yt.wer.efms.dto.ApproveImportRequest;
 
 import java.util.Collections;
 import java.util.List;
@@ -73,6 +74,20 @@ public class ImportController {
         try {
             List<ImportRecordDto> imports = importedParcelService.getUserImports(userDetails.getUsername());
             return ResponseEntity.ok(imports);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/{importId}")
+    public ResponseEntity<ImportRecordDto> getImport(
+            @PathVariable Long importId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            ImportRecordDto importRecord = importedParcelService.getImportRecord(importId, userDetails.getUsername());
+            return ResponseEntity.ok(importRecord);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         } catch (Exception e) {
@@ -149,6 +164,22 @@ public class ImportController {
             return ResponseEntity.ok(response);
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
+
+    @PostMapping("/{importId}/approve")
+    public ResponseEntity<Void> approveImport(
+            @PathVariable Long importId,
+            @RequestBody(required = false) ApproveImportRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            Long farmId = request != null ? request.getFarmId() : null;
+            importedParcelService.approveImport(importId, userDetails.getUsername(), farmId);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }

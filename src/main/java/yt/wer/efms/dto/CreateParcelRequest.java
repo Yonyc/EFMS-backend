@@ -10,6 +10,7 @@ public class CreateParcelRequest {
     private String geodata;
     private String color;
     private Long correspondingPacId;
+    private Long periodId;
 
     public CreateParcelRequest() {}
 
@@ -33,4 +34,7 @@ public class CreateParcelRequest {
 
     public Long getCorrespondingPacId() { return correspondingPacId; }
     public void setCorrespondingPacId(Long correspondingPacId) { this.correspondingPacId = correspondingPacId; }
+
+    public Long getPeriodId() { return periodId; }
+    public void setPeriodId(Long periodId) { this.periodId = periodId; }
 }

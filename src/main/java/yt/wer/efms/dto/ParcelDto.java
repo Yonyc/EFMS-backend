@@ -12,6 +12,7 @@ public class ParcelDto {
     private String color;
     private Long farmId;
     private Long correspondingPacId;
+    private Long periodId;
 
     public ParcelDto() {}
 
@@ -58,4 +59,7 @@ public class ParcelDto {
 
     public Long getCorrespondingPacId() { return correspondingPacId; }
     public void setCorrespondingPacId(Long correspondingPacId) { this.correspondingPacId = correspondingPacId; }
+
+    public Long getPeriodId() { return periodId; }
+    public void setPeriodId(Long periodId) { this.periodId = periodId; }
 }

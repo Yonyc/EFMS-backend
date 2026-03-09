@@ -39,6 +39,17 @@ public class ImportedParcelService {
         return imports.stream().map(this::toImportRecordDto).collect(Collectors.toList());
     }
 
+    public ImportRecordDto getImportRecord(Long importId, String username) {
+        ImportRecord importRecord = importRecordRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Import not found"));
+
+        if (!importRecord.getUser().getUsername().equals(username)) {
+            throw new RuntimeException("Unauthorized access to import");
+        }
+
+        return toImportRecordDto(importRecord);
+    }
+
     // Get imported parcels by import ID
     public List<ImportedParcelDto> getImportedParcels(Long importId, String username) {
         ImportRecord importRecord = importRecordRepository.findById(importId)
@@ -292,6 +303,89 @@ public class ImportedParcelService {
     }
 
     @Transactional
+    public void approveImport(Long importId, String username, Long farmId) {
+        ImportRecord importRecord = importRecordRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Import not found"));
+
+        if (!importRecord.getUser().getUsername().equals(username)) {
+            throw new RuntimeException("Unauthorized access to import");
+        }
+
+        List<ImportedParcel> parcels = importedParcelRepository.findByImportRecordId(importId);
+        LocalDateTime now = LocalDateTime.now();
+        Farm resolvedFarm = null;
+
+        for (ImportedParcel parcel : parcels) {
+            if (parcel.getValidationStatus() == ValidationStatus.CONVERTED) {
+                continue;
+            }
+
+            if (parcel.getParcel() != null) {
+                parcel.setValidationStatus(ValidationStatus.APPROVED);
+                parcel.setModifiedAt(now);
+                continue;
+            }
+
+            Parcel existingParcel = parcelRepository.findByCorrespondingPacId(parcel.getId());
+            if (existingParcel != null) {
+                parcel.setParcel(existingParcel);
+                parcel.setValidationStatus(ValidationStatus.APPROVED);
+                parcel.setModifiedAt(now);
+                continue;
+            }
+
+            if (resolvedFarm == null) {
+                resolvedFarm = resolveApprovalFarm(username, farmId);
+            }
+
+            Parcel newParcel = new Parcel();
+            newParcel.setName("Imported Parcel " + parcel.getId());
+            newParcel.setFarm(resolvedFarm);
+            newParcel.setActive(true);
+            newParcel.setStartValidity(now);
+            newParcel.setCreatedAt(now);
+            newParcel.setColor("#4CAF50");
+            newParcel.setCorrespondingPac(parcel);
+            if (parcel.getGeodata() != null) {
+                newParcel.setGeodata(parcel.getGeodata());
+            }
+
+            Parcel savedParcel = parcelRepository.save(newParcel);
+
+            parcel.setParcel(savedParcel);
+            parcel.setValidationStatus(ValidationStatus.APPROVED);
+            parcel.setModifiedAt(now);
+        }
+
+        importedParcelRepository.saveAll(parcels);
+
+        if (importRecord.getApprovedAt() == null) {
+            importRecord.setApprovedAt(now);
+        }
+        importRecordRepository.save(importRecord);
+    }
+
+    private Farm resolveApprovalFarm(String username, Long farmId) {
+        if (farmId != null) {
+            Farm farm = farmRepository.findById(farmId)
+                    .orElseThrow(() -> new RuntimeException("Farm not found"));
+            if (!farm.getOwner().getUsername().equals(username)) {
+                throw new RuntimeException("You can only add parcels to your own farms");
+            }
+            return farm;
+        }
+
+        List<Farm> farms = farmRepository.findByOwnerUsername(username);
+        if (farms.size() == 1) {
+            return farms.get(0);
+        }
+        if (farms.isEmpty()) {
+            throw new RuntimeException("No farm available to attach the parcel");
+        }
+        throw new RuntimeException("Farm id is required when multiple farms exist");
+    }
+
+    @Transactional
     public ImportRecordDto renameImport(Long importId, String username, String name) {
         ImportRecord importRecord = importRecordRepository.findById(importId)
                 .orElseThrow(() -> new RuntimeException("Import not found"));
@@ -363,6 +457,7 @@ public class ImportedParcelService {
         dto.setFilename(record.getFilename());
         dto.setName(record.getName() != null ? record.getName() : record.getFilename());
         dto.setCreatedAt(record.getCreatedAt());
+        dto.setApprovedAt(record.getApprovedAt());
         if (record.getUser() != null) {
             dto.setUsername(record.getUser().getUsername());
         }

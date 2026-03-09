@@ -20,6 +20,9 @@ public class ImportRecord {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
@@ -38,6 +41,9 @@ public class ImportRecord {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getApprovedAt() { return approvedAt; }
+    public void setApprovedAt(LocalDateTime approvedAt) { this.approvedAt = approvedAt; }
 
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }

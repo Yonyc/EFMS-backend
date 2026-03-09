@@ -47,6 +47,10 @@ public class Parcel {
     @JoinColumn(name = "farm")
     private Farm farm;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "period")
+    private Period period;
+
     @ManyToMany(mappedBy = "parcels")
     private Set<ParcelOperation> parcelOperations = new HashSet<>();
 
@@ -85,6 +89,9 @@ public class Parcel {
 
     public Farm getFarm() { return farm; }
     public void setFarm(Farm farm) { this.farm = farm; }
+
+    public Period getPeriod() { return period; }
+    public void setPeriod(Period period) { this.period = period; }
 
     public Set<ParcelOperation> getParcelOperations() { return parcelOperations; }
     public void setParcelOperations(Set<ParcelOperation> parcelOperations) { this.parcelOperations = parcelOperations; }

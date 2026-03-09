@@ -25,6 +25,17 @@ CREATE TABLE "parcels" (
   "color" string,
   "corresponding_pac" integer NOT NULL,
   "parent_parcel" integer,
+  "farm" integer,
+  "period" integer
+);
+
+CREATE TABLE "periods" (
+  "id" integer PRIMARY KEY,
+  "created_at" timestamp,
+  "modified_at" timestamp,
+  "name" string,
+  "start_date" timestamp,
+  "end_date" timestamp,
   "farm" integer
 );
 
@@ -111,7 +122,13 @@ CREATE TABLE "farms" (
   "id" integer PRIMARY KEY,
   "created_at" timestamp,
   "modified_at" timestamp,
-  "name" string
+  "name" string,
+  "description" string,
+  "location" string,
+  "is_public" bool,
+  "show_name" bool,
+  "show_description" bool,
+  "show_location" bool
 );
 
 CREATE TABLE "farm_users" (
@@ -125,7 +142,8 @@ CREATE TABLE "farm_users" (
 CREATE TABLE "users" (
   "id" integer PRIMARY KEY,
   "created_at" timestamp,
-  "modified_at" timestamp
+  "modified_at" timestamp,
+  "tutorial_state" string DEFAULT 'NOT_STARTED'
 );
 
 ALTER TABLE "imported_parcels" ADD FOREIGN KEY ("parcel") REFERENCES "parcels" ("id");
@@ -135,6 +153,8 @@ ALTER TABLE "parcels" ADD FOREIGN KEY ("corresponding_pac") REFERENCES "imported
 ALTER TABLE "parcels" ADD FOREIGN KEY ("parent_parcel") REFERENCES "parcels" ("id");
 
 ALTER TABLE "parcels" ADD FOREIGN KEY ("farm") REFERENCES "farms" ("id");
+
+ALTER TABLE "parcels" ADD FOREIGN KEY ("period") REFERENCES "periods" ("id");
 
 ALTER TABLE "parcel_operations" ADD FOREIGN KEY ("type") REFERENCES "operation_types" ("id");
 

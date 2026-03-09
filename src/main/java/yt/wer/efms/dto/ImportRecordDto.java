@@ -7,6 +7,7 @@ public class ImportRecordDto {
     private String filename;
     private String name;
     private LocalDateTime createdAt;
+    private LocalDateTime approvedAt;
     private String username;
     private Integer totalParcels;
     private Integer pendingParcels;
@@ -27,6 +28,9 @@ public class ImportRecordDto {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getApprovedAt() { return approvedAt; }
+    public void setApprovedAt(LocalDateTime approvedAt) { this.approvedAt = approvedAt; }
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
