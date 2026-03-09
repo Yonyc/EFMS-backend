@@ -44,4 +44,15 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long> {
 						  @Param("minLat") Double minLat,
 						  @Param("maxLng") Double maxLng,
 						  @Param("maxLat") Double maxLat);
+
+	@Query(value = "SELECT p.* FROM parcels p " +
+			"WHERE p.farm = :farmId " +
+			"AND p.geodata IS NOT NULL " +
+			"AND ST_Intersects(ST_SetSRID(p.geodata, 4326), ST_MakeEnvelope(CAST(:minLng AS double precision), CAST(:minLat AS double precision), CAST(:maxLng AS double precision), CAST(:maxLat AS double precision), 4326))",
+		nativeQuery = true)
+	List<Parcel> findByFarmIdWithinBounds(@Param("farmId") Long farmId,
+								 @Param("minLng") Double minLng,
+								 @Param("minLat") Double minLat,
+								 @Param("maxLng") Double maxLng,
+								 @Param("maxLat") Double maxLat);
 }

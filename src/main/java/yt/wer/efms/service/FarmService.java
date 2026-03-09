@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import yt.wer.efms.dto.CreateParcelRequest;
 import yt.wer.efms.dto.FarmDto;
 import yt.wer.efms.dto.ParcelDto;
+import yt.wer.efms.dto.ParcelListDto;
 import yt.wer.efms.model.Farm;
 import yt.wer.efms.model.ImportedParcel;
 import yt.wer.efms.model.Parcel;
@@ -160,6 +161,16 @@ public class FarmService {
 
     public List<ParcelDto> listParcels(Long farmId) {
         List<Parcel> parcels = parcelRepository.findByFarmId(farmId);
+        return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());
+    }
+
+    public List<ParcelListDto> listParcelSummaries(Long farmId) {
+        List<Parcel> parcels = parcelRepository.findByFarmId(farmId);
+        return parcels.stream().map(this::toParcelListDto).collect(Collectors.toList());
+    }
+
+    public List<ParcelDto> listParcelsWithinBounds(Long farmId, Double minLat, Double minLng, Double maxLat, Double maxLng) {
+        List<Parcel> parcels = parcelRepository.findByFarmIdWithinBounds(farmId, minLng, minLat, maxLng, maxLat);
         return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());
     }
 
@@ -367,6 +378,17 @@ public class FarmService {
         if (p.getPeriod() != null) {
             dto.setPeriodId(p.getPeriod().getId());
         }
+        return dto;
+    }
+
+    private ParcelListDto toParcelListDto(Parcel p) {
+        ParcelListDto dto = new ParcelListDto();
+        dto.setId(p.getId());
+        dto.setName(p.getName());
+        dto.setActive(p.getActive());
+        dto.setColor(p.getColor());
+        if (p.getFarm() != null) dto.setFarmId(p.getFarm().getId());
+        if (p.getPeriod() != null) dto.setPeriodId(p.getPeriod().getId());
         return dto;
     }
 

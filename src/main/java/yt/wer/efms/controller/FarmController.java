@@ -8,6 +8,7 @@ import yt.wer.efms.dto.CreateParcelRequest;
 import yt.wer.efms.dto.CreatePeriodRequest;
 import yt.wer.efms.dto.FarmDto;
 import yt.wer.efms.dto.ParcelDto;
+import yt.wer.efms.dto.ParcelListDto;
 import yt.wer.efms.dto.PeriodDto;
 import yt.wer.efms.service.FarmService;
 
@@ -69,6 +70,22 @@ public class FarmController {
     @GetMapping("/{id}/parcels")
     public ResponseEntity<List<ParcelDto>> listParcels(@PathVariable Long id) {
         List<ParcelDto> parcels = farmService.listParcels(id);
+        return ResponseEntity.ok(parcels);
+    }
+
+    @GetMapping("/{id}/parcels/all")
+    public ResponseEntity<List<ParcelListDto>> listParcelsAll(@PathVariable Long id) {
+        List<ParcelListDto> parcels = farmService.listParcelSummaries(id);
+        return ResponseEntity.ok(parcels);
+    }
+
+    @GetMapping("/{id}/parcels/viewport")
+    public ResponseEntity<List<ParcelDto>> listParcelsViewport(@PathVariable Long id,
+                                                               @RequestParam Double minLat,
+                                                               @RequestParam Double minLng,
+                                                               @RequestParam Double maxLat,
+                                                               @RequestParam Double maxLng) {
+        List<ParcelDto> parcels = farmService.listParcelsWithinBounds(id, minLat, minLng, maxLat, maxLng);
         return ResponseEntity.ok(parcels);
     }
 
