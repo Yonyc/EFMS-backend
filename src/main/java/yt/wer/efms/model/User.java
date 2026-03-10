@@ -34,10 +34,10 @@ public class User {
     private String email;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "tutorial_state", nullable = false, columnDefinition = "varchar(50) default 'NOT_STARTED'")
+    @Column(name = "tutorial_state", nullable = false)
     private TutorialState tutorialState = TutorialState.NOT_STARTED;
 
-    @Column(name = "operations_popup_top_right", nullable = false, columnDefinition = "boolean default false")
+    @Column(name = "operations_popup_top_right", nullable = false)
     private boolean operationsPopupTopRight = false;
 
     @Column(name = "avatar_url")

@@ -21,6 +21,7 @@ import yt.wer.efms.repository.OperationProductRepository;
 import yt.wer.efms.repository.OperationTypeRepository;
 import yt.wer.efms.repository.ParcelOperationRepository;
 import yt.wer.efms.repository.ParcelRepository;
+import yt.wer.efms.repository.ParcelShareRepository;
 import yt.wer.efms.repository.ProductRepository;
 import yt.wer.efms.repository.ToolRepository;
 import yt.wer.efms.repository.UnitRepository;
@@ -42,6 +43,8 @@ public class ParcelOperationService {
     private final ToolRepository toolRepository;
     private final UnitRepository unitRepository;
     private final FarmRepository farmRepository;
+    private final PermissionService permissionService;
+    private final ParcelShareRepository parcelShareRepository;
 
     public ParcelOperationService(ParcelOperationRepository parcelOperationRepository,
                                   ParcelRepository parcelRepository,
@@ -50,7 +53,9 @@ public class ParcelOperationService {
                                   ProductRepository productRepository,
                                   ToolRepository toolRepository,
                                   UnitRepository unitRepository,
-                                  FarmRepository farmRepository) {
+                                  FarmRepository farmRepository,
+                                  PermissionService permissionService,
+                                  ParcelShareRepository parcelShareRepository) {
         this.parcelOperationRepository = parcelOperationRepository;
         this.parcelRepository = parcelRepository;
         this.operationTypeRepository = operationTypeRepository;
@@ -59,6 +64,8 @@ public class ParcelOperationService {
         this.toolRepository = toolRepository;
         this.unitRepository = unitRepository;
         this.farmRepository = farmRepository;
+        this.permissionService = permissionService;
+        this.parcelShareRepository = parcelShareRepository;
     }
 
     public List<OperationTypeDto> listOperationTypes() {
@@ -68,11 +75,15 @@ public class ParcelOperationService {
     }
 
     public List<ParcelOperationDto> listOperationsForParcel(Long farmId, Long parcelId) {
-        requireOwnedFarm(farmId);
+        requireFarmView(farmId);
         Parcel parcel = parcelRepository.findById(parcelId)
                 .orElseThrow(() -> new RuntimeException("Parcel not found"));
         if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
             throw new RuntimeException("Parcel does not belong to this farm");
+        }
+        String username = permissionService.currentUsername();
+        if (!permissionService.canViewParcel(parcel, username)) {
+            throw new RuntimeException("Not allowed to view this parcel");
         }
 
         return parcelOperationRepository.findDistinctByParcelsIdOrderByDateDesc(parcelId)
@@ -82,11 +93,15 @@ public class ParcelOperationService {
     }
 
     public Optional<ParcelOperationDto> createOperation(Long farmId, Long parcelId, CreateParcelOperationRequest request) {
-        Farm farm = requireOwnedFarm(farmId);
+        Farm farm = requireFarmEdit(farmId);
         Parcel parcel = parcelRepository.findById(parcelId)
                 .orElseThrow(() -> new RuntimeException("Parcel not found"));
         if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
             throw new RuntimeException("Parcel does not belong to this farm");
+        }
+        String username = permissionService.currentUsername();
+        if (!permissionService.canEditParcel(parcel, username)) {
+            throw new RuntimeException("Not allowed to edit this parcel");
         }
 
         ParcelOperation operation = new ParcelOperation();
@@ -145,11 +160,15 @@ public class ParcelOperationService {
     }
 
     public Optional<ParcelOperationDto> updateOperation(Long farmId, Long parcelId, Long operationId, CreateParcelOperationRequest request) {
-        Farm farm = requireOwnedFarm(farmId);
+        Farm farm = requireFarmEdit(farmId);
         Parcel parcel = parcelRepository.findById(parcelId)
                 .orElseThrow(() -> new RuntimeException("Parcel not found"));
         if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
             throw new RuntimeException("Parcel does not belong to this farm");
+        }
+        String username = permissionService.currentUsername();
+        if (!permissionService.canEditParcel(parcel, username)) {
+            throw new RuntimeException("Not allowed to edit this parcel");
         }
 
         ParcelOperation operation = parcelOperationRepository.findById(operationId)
@@ -251,13 +270,19 @@ public class ParcelOperationService {
         );
     }
 
-    private Farm requireOwnedFarm(Long farmId) {
-        String username = null;
-        try { username = SecurityContextHolder.getContext().getAuthentication().getName(); } catch (Exception ignored) {}
-        Farm farm = farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));
-        if (farm.getOwner() == null || username == null || !username.equals(farm.getOwner().getUsername())) {
-            throw new RuntimeException("You can only manage operations for your own farms");
+    private Farm requireFarmView(Long farmId) {
+        String username = permissionService.currentUsername();
+        if (!permissionService.canViewFarm(farmId, username)) {
+            throw new RuntimeException("You can only view operations for farms you can access");
         }
-        return farm;
+        return farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));
+    }
+
+    private Farm requireFarmEdit(Long farmId) {
+        String username = permissionService.currentUsername();
+        if (!permissionService.canEditFarm(farmId, username)) {
+            throw new RuntimeException("You can only manage operations for farms you can edit");
+        }
+        return farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));
     }
 }

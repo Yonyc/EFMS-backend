@@ -13,11 +13,21 @@ import yt.wer.efms.model.Farm;
 import yt.wer.efms.model.ImportedParcel;
 import yt.wer.efms.model.Parcel;
 import yt.wer.efms.model.Period;
+import yt.wer.efms.model.ParcelShare;
+import yt.wer.efms.model.FarmUser;
+import yt.wer.efms.model.FarmUserId;
+import yt.wer.efms.model.Role;
+import yt.wer.efms.model.ParcelShareRole;
+import yt.wer.efms.model.User;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 import yt.wer.efms.repository.FarmRepository;
 import yt.wer.efms.repository.ImportedParcelRepository;
 import yt.wer.efms.repository.ParcelRepository;
 import yt.wer.efms.repository.PeriodRepository;
+import yt.wer.efms.repository.ParcelShareRepository;
 import yt.wer.efms.repository.UserRepository;
+import yt.wer.efms.repository.FarmUserRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
@@ -35,17 +45,26 @@ public class FarmService {
     private final UserRepository userRepository;
     private final ImportedParcelRepository importedParcelRepository;
     private final PeriodRepository periodRepository;
+    private final ParcelShareRepository parcelShareRepository;
+    private final PermissionService permissionService;
+    private final FarmUserRepository farmUserRepository;
     private final WKTReader wktReader = new WKTReader();
     private final WKTWriter wktWriter = new WKTWriter();
 
     public FarmService(FarmRepository farmRepository, ParcelRepository parcelRepository, 
                        UserRepository userRepository, ImportedParcelRepository importedParcelRepository,
-                       PeriodRepository periodRepository) {
+                       PeriodRepository periodRepository,
+                       ParcelShareRepository parcelShareRepository,
+                       PermissionService permissionService,
+                       FarmUserRepository farmUserRepository) {
         this.farmRepository = farmRepository;
         this.parcelRepository = parcelRepository;
         this.userRepository = userRepository;
         this.importedParcelRepository = importedParcelRepository;
         this.periodRepository = periodRepository;
+        this.parcelShareRepository = parcelShareRepository;
+        this.permissionService = permissionService;
+        this.farmUserRepository = farmUserRepository;
     }
 
     public List<FarmDto> listAll() {
@@ -55,9 +74,26 @@ public class FarmService {
     }
 
     public List<FarmDto> listUserFarms(String username) {
-        return farmRepository.findByOwnerUsername(username).stream()
-                .map(this::toFarmDto)
-                .collect(Collectors.toList());
+        List<Farm> owned = farmRepository.findByOwnerUsername(username);
+        List<Farm> memberFarms = farmRepository.findAll().stream()
+            .filter(farm -> permissionService.getFarmRole(farm.getId(), username).isPresent())
+            .collect(Collectors.toList());
+        List<Farm> sharedFarms = parcelShareRepository.findByUserUsername(username).stream()
+            .map(ParcelShare::getParcel)
+            .map(Parcel::getFarm)
+            .filter(farm -> farm != null)
+            .distinct()
+            .collect(Collectors.toList());
+        return java.util.stream.Stream.of(owned, memberFarms, sharedFarms)
+            .flatMap(List::stream)
+            .distinct()
+            .map(farm -> {
+                FarmDto dto = toFarmDto(farm);
+                dto.setCanEdit(permissionService.canEditFarm(farm.getId(), username));
+                dto.setCanManage(permissionService.canManageFarm(farm.getId(), username));
+                return dto;
+            })
+            .collect(Collectors.toList());
     }
 
     public Optional<FarmDto> findById(Long id) {
@@ -70,11 +106,11 @@ public class FarmService {
         try {
             username = SecurityContextHolder.getContext().getAuthentication().getName();
         } catch (Exception e) {
-            throw new RuntimeException("Authentication required to create a farm");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required to create a farm");
         }
 
         if (username == null || username.equals("anonymousUser")) {
-            throw new RuntimeException("Authentication required to create a farm");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required to create a farm");
         }
 
         Farm farm = new Farm();
@@ -106,6 +142,10 @@ public class FarmService {
     }
 
     public Optional<FarmDto> update(Long id, FarmDto input) {
+        String username = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(id, username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update farms you manage");
+        }
         return farmRepository.findById(id).map(f -> {
             if (input.getName() != null) f.setName(input.getName());
             if (input.getDescription() != null) f.setDescription(input.getDescription());
@@ -121,31 +161,26 @@ public class FarmService {
     }
 
     public void delete(Long id) {
-        // only allow deletion if current user is owner or has admin role
-        String username = null;
-        try { username = SecurityContextHolder.getContext().getAuthentication().getName(); } catch (Exception ignored) {}
-
+        String username = permissionService.currentUsername();
         Farm farm = farmRepository.findById(id).orElse(null);
         if (farm == null) return;
-        if (farm.getOwner() != null && username != null && username.equals(farm.getOwner().getUsername())) {
+        if (permissionService.isOwner(farm, username)) {
             farmRepository.deleteById(id);
+            return;
         }
-        // otherwise ignore or throw - for now we silently ignore if not owner
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only delete farms you own");
     }
 
     public boolean deleteParcel(Long parcelId) {
-        String username = null;
-        try { username = SecurityContextHolder.getContext().getAuthentication().getName(); } catch (Exception ignored) {}
-
         Optional<Parcel> parcelOpt = parcelRepository.findById(parcelId);
         if (parcelOpt.isEmpty()) {
             return false;
         }
 
         Parcel parcel = parcelOpt.get();
-        Farm farm = parcel.getFarm();
-        if (farm != null && farm.getOwner() != null && username != null && !username.equals(farm.getOwner().getUsername())) {
-            throw new RuntimeException("You can only delete parcels from your own farms");
+        String username = permissionService.currentUsername();
+        if (!permissionService.canEditFarm(parcel.getFarm().getId(), username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only delete parcels from farms you can edit");
         }
 
         ImportedParcel importedParcel = parcel.getCorrespondingPac();
@@ -160,17 +195,40 @@ public class FarmService {
     }
 
     public List<ParcelDto> listParcels(Long farmId) {
-        List<Parcel> parcels = parcelRepository.findByFarmId(farmId);
+        String username = permissionService.currentUsername();
+        List<Parcel> parcels;
+        if (permissionService.canViewFarm(farmId, username)) {
+            parcels = parcelRepository.findByFarmId(farmId);
+        } else {
+            parcels = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
+                    .map(ParcelShare::getParcel)
+                    .collect(Collectors.toList());
+        }
         return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());
     }
 
     public List<ParcelListDto> listParcelSummaries(Long farmId) {
-        List<Parcel> parcels = parcelRepository.findByFarmId(farmId);
+        String username = permissionService.currentUsername();
+        List<Parcel> parcels;
+        if (permissionService.canViewFarm(farmId, username)) {
+            parcels = parcelRepository.findByFarmId(farmId);
+        } else {
+            parcels = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
+                    .map(ParcelShare::getParcel)
+                    .collect(Collectors.toList());
+        }
         return parcels.stream().map(this::toParcelListDto).collect(Collectors.toList());
     }
 
     public List<ParcelDto> listParcelsWithinBounds(Long farmId, Double minLat, Double minLng, Double maxLat, Double maxLng) {
+        String username = permissionService.currentUsername();
         List<Parcel> parcels = parcelRepository.findByFarmIdWithinBounds(farmId, minLng, minLat, maxLng, maxLat);
+        if (!permissionService.canViewFarm(farmId, username)) {
+            java.util.Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
+                    .map(share -> share.getParcel().getId())
+                    .collect(java.util.stream.Collectors.toSet());
+            parcels = parcels.stream().filter(p -> allowedIds.contains(p.getId())).collect(Collectors.toList());
+        }
         return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());
     }
 
@@ -185,6 +243,7 @@ public class FarmService {
                                          Double minLng,
                                          Double maxLat,
                                          Double maxLng) {
+        String username = permissionService.currentUsername();
         LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
 
@@ -208,22 +267,23 @@ public class FarmService {
                 resolvedMaxLat
         );
 
+        if (!permissionService.canViewFarm(farmId, username)) {
+            java.util.Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
+                .map(share -> share.getParcel().getId())
+                .collect(java.util.stream.Collectors.toSet());
+            parcels = parcels.stream().filter(p -> allowedIds.contains(p.getId())).collect(Collectors.toList());
+        }
+
         return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());
     }
 
     public ParcelDto createParcel(Long farmId, CreateParcelRequest request) {
         // Verify farm exists and user has permission
         Farm farm = farmRepository.findById(farmId)
-                .orElseThrow(() -> new RuntimeException("Farm not found"));
-
-        String username = null;
-        try { 
-            username = SecurityContextHolder.getContext().getAuthentication().getName(); 
-        } catch (Exception ignored) {}
-
-        // Check if user owns the farm
-        if (farm.getOwner() != null && username != null && !username.equals(farm.getOwner().getUsername())) {
-            throw new RuntimeException("You can only add parcels to your own farms");
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        String username = permissionService.currentUsername();
+        if (!permissionService.canEditFarm(farmId, username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only add parcels to farms you can edit");
         }
 
         Parcel parcel = new Parcel();
@@ -239,7 +299,7 @@ public class FarmService {
                 Geometry geom = wktReader.read(request.getGeodata());
                 parcel.setGeodata(geom);
             } catch (Exception e) {
-                throw new RuntimeException("Invalid WKT geometry: " + e.getMessage(), e);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid WKT geometry: " + e.getMessage(), e);
             }
         }
         
@@ -255,9 +315,9 @@ public class FarmService {
 
         if (request.getPeriodId() != null) {
             Period period = periodRepository.findById(request.getPeriodId())
-                    .orElseThrow(() -> new RuntimeException("Period not found"));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Period not found"));
             if (period.getFarm() == null || !period.getFarm().getId().equals(farmId)) {
-                throw new RuntimeException("Period does not belong to this farm");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Period does not belong to this farm");
             }
             parcel.setPeriod(period);
         }
@@ -273,7 +333,13 @@ public class FarmService {
     }
 
     public Optional<ParcelDto> findParcelById(Long parcelId) {
-        return parcelRepository.findById(parcelId).map(this::toParcelDto);
+        String username = permissionService.currentUsername();
+        return parcelRepository.findById(parcelId).map(parcel -> {
+            if (!permissionService.canViewParcel(parcel, username)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view parcels you have access to");
+            }
+            return toParcelDto(parcel);
+        });
     }
 
     public Optional<ParcelDto> updateParcel(Long farmId, Long parcelId, CreateParcelRequest request) {
@@ -282,26 +348,24 @@ public class FarmService {
         try {
             username = SecurityContextHolder.getContext().getAuthentication().getName();
         } catch (Exception e) {
-            throw new RuntimeException("Authentication required to update a parcel");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required to update a parcel");
         }
 
         if (username == null || username.equals("anonymousUser")) {
-            throw new RuntimeException("Authentication required to update a parcel");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required to update a parcel");
         }
 
         // Verify farm exists
-        Farm farm = farmRepository.findById(farmId)
-                .orElseThrow(() -> new RuntimeException("Farm not found"));
-
-        // Check if user owns the farm
-        if (farm.getOwner() == null || !username.equals(farm.getOwner().getUsername())) {
-            throw new RuntimeException("You can only update parcels in your own farms");
-        }
+        farmRepository.findById(farmId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
 
         // Find the parcel and verify it belongs to this farm
         return parcelRepository.findById(parcelId).map(parcel -> {
             if (!parcel.getFarm().getId().equals(farmId)) {
-                throw new RuntimeException("Parcel does not belong to this farm");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
+            }
+            if (!permissionService.canEditParcel(parcel, username)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update parcels you can edit");
             }
 
             // Update fields
@@ -324,7 +388,7 @@ public class FarmService {
                     Geometry geom = wktReader.read(request.getGeodata());
                     parcel.setGeodata(geom);
                 } catch (Exception e) {
-                    throw new RuntimeException("Invalid WKT geometry: " + e.getMessage(), e);
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid WKT geometry: " + e.getMessage(), e);
                 }
             }
             
@@ -342,9 +406,9 @@ public class FarmService {
 
             if (request.getPeriodId() != null) {
                 Period period = periodRepository.findById(request.getPeriodId())
-                        .orElseThrow(() -> new RuntimeException("Period not found"));
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Period not found"));
                 if (period.getFarm() == null || !period.getFarm().getId().equals(farmId)) {
-                    throw new RuntimeException("Period does not belong to this farm");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Period does not belong to this farm");
                 }
                 parcel.setPeriod(period);
             }
@@ -355,6 +419,7 @@ public class FarmService {
     }
 
     private ParcelDto toParcelDto(Parcel p) {
+        String username = permissionService.currentUsername();
         ParcelDto dto = new ParcelDto();
         dto.setId(p.getId());
         dto.setName(p.getName());
@@ -378,10 +443,13 @@ public class FarmService {
         if (p.getPeriod() != null) {
             dto.setPeriodId(p.getPeriod().getId());
         }
+        dto.setCanEdit(permissionService.canEditParcel(p, username));
+        dto.setCanShare(permissionService.canShareParcel(p, username));
         return dto;
     }
 
     private ParcelListDto toParcelListDto(Parcel p) {
+        String username = permissionService.currentUsername();
         ParcelListDto dto = new ParcelListDto();
         dto.setId(p.getId());
         dto.setName(p.getName());
@@ -389,10 +457,16 @@ public class FarmService {
         dto.setColor(p.getColor());
         if (p.getFarm() != null) dto.setFarmId(p.getFarm().getId());
         if (p.getPeriod() != null) dto.setPeriodId(p.getPeriod().getId());
+        dto.setCanEdit(permissionService.canEditParcel(p, username));
+        dto.setCanShare(permissionService.canShareParcel(p, username));
         return dto;
     }
 
     public List<yt.wer.efms.dto.PeriodDto> listPeriods(Long farmId) {
+        String username = permissionService.currentUsername();
+        if (!permissionService.canViewFarm(farmId, username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized");
+        }
         return periodRepository.findByFarmId(farmId).stream()
                 .map(this::toPeriodDto)
                 .collect(Collectors.toList());
@@ -400,15 +474,10 @@ public class FarmService {
 
     public yt.wer.efms.dto.PeriodDto createPeriod(Long farmId, yt.wer.efms.dto.CreatePeriodRequest request) {
         Farm farm = farmRepository.findById(farmId)
-                .orElseThrow(() -> new RuntimeException("Farm not found"));
-
-        String username = null;
-        try {
-            username = SecurityContextHolder.getContext().getAuthentication().getName();
-        } catch (Exception ignored) {}
-
-        if (farm.getOwner() != null && username != null && !username.equals(farm.getOwner().getUsername())) {
-            throw new RuntimeException("You can only create periods for your own farms");
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        String username = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only create periods for farms you manage");
         }
 
         Period period = new Period();
@@ -424,21 +493,16 @@ public class FarmService {
     }
 
     public Optional<yt.wer.efms.dto.PeriodDto> updatePeriod(Long farmId, Long periodId, yt.wer.efms.dto.CreatePeriodRequest request) {
-        Farm farm = farmRepository.findById(farmId)
-                .orElseThrow(() -> new RuntimeException("Farm not found"));
-
-        String username = null;
-        try {
-            username = SecurityContextHolder.getContext().getAuthentication().getName();
-        } catch (Exception ignored) {}
-
-        if (farm.getOwner() == null || username == null || !username.equals(farm.getOwner().getUsername())) {
-            throw new RuntimeException("You can only update periods for your own farms");
+        farmRepository.findById(farmId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        String username = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update periods for farms you manage");
         }
 
         return periodRepository.findById(periodId).map(period -> {
             if (period.getFarm() == null || !period.getFarm().getId().equals(farmId)) {
-                throw new RuntimeException("Period does not belong to this farm");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Period does not belong to this farm");
             }
             if (request.getName() != null) period.setName(request.getName());
             if (request.getStartDate() != null) period.setStartDate(request.getStartDate());
@@ -478,5 +542,150 @@ public class FarmService {
         if (dto.getShowDescription() != null && !dto.getShowDescription()) dto.setDescription(null);
         if (dto.getShowLocation() != null && !dto.getShowLocation()) dto.setLocation(null);
         return dto;
+    }
+
+    public List<yt.wer.efms.dto.FarmMemberDto> listMembers(Long farmId) {
+        String username = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view members for farms you manage");
+        }
+        Farm farm = farmRepository.findById(farmId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        List<yt.wer.efms.dto.FarmMemberDto> members = farmUserRepository.findByFarmId(farmId).stream()
+                .map(fu -> new yt.wer.efms.dto.FarmMemberDto(
+                        fu.getUser().getId(),
+                        fu.getUser().getUsername(),
+                        fu.getRole().name(),
+                        false
+                ))
+                .collect(Collectors.toList());
+        if (farm.getOwner() != null) {
+            boolean ownerAlreadyListed = members.stream().anyMatch(m -> m.getUserId().equals(farm.getOwner().getId()));
+            if (!ownerAlreadyListed) {
+            members.add(new yt.wer.efms.dto.FarmMemberDto(
+                farm.getOwner().getId(),
+                farm.getOwner().getUsername(),
+                "OWNER",
+                true
+            ));
+            }
+        }
+        return members;
+    }
+
+    public yt.wer.efms.dto.FarmMemberDto addMember(Long farmId, String username, String role) {
+        String current = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only manage members for farms you manage");
+        }
+        Farm farm = farmRepository.findById(farmId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        var user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        Role resolvedRole = Role.valueOf(role.toUpperCase());
+        FarmUserId id = new FarmUserId(farmId, user.getId());
+        FarmUser farmUser = new FarmUser();
+        farmUser.setId(id);
+        farmUser.setFarm(farm);
+        farmUser.setUser(user);
+        farmUser.setRole(resolvedRole);
+        farmUser.setCreatedAt(LocalDateTime.now());
+        farmUser.setModifiedAt(LocalDateTime.now());
+        farmUserRepository.save(farmUser);
+        return new yt.wer.efms.dto.FarmMemberDto(user.getId(), user.getUsername(), resolvedRole.name(), false);
+    }
+
+    public Optional<yt.wer.efms.dto.FarmMemberDto> updateMember(Long farmId, Long userId, String role) {
+        String current = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only manage members for farms you manage");
+        }
+        FarmUserId id = new FarmUserId(farmId, userId);
+        return farmUserRepository.findById(id).map(fu -> {
+            Role resolvedRole = Role.valueOf(role.toUpperCase());
+            fu.setRole(resolvedRole);
+            fu.setModifiedAt(LocalDateTime.now());
+            farmUserRepository.save(fu);
+            return new yt.wer.efms.dto.FarmMemberDto(fu.getUser().getId(), fu.getUser().getUsername(), resolvedRole.name(), false);
+        });
+    }
+
+    public void removeMember(Long farmId, Long userId) {
+        String current = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only manage members for farms you manage");
+        }
+        FarmUserId id = new FarmUserId(farmId, userId);
+        farmUserRepository.deleteById(id);
+    }
+
+    public List<yt.wer.efms.dto.ParcelShareDto> listParcelShares(Long farmId, Long parcelId) {
+        String username = permissionService.currentUsername();
+        Parcel parcel = permissionService.requireParcel(parcelId);
+        if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
+        }
+        if (!permissionService.canShareParcel(parcel, username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view shares for parcels you manage");
+        }
+        return parcelShareRepository.findByParcelId(parcelId).stream()
+                .map(share -> new yt.wer.efms.dto.ParcelShareDto(
+                        share.getUser().getId(),
+                        share.getUser().getUsername(),
+                        share.getRole().name()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    public yt.wer.efms.dto.ParcelShareDto addParcelShare(Long farmId, Long parcelId, String username, String role) {
+        String current = permissionService.currentUsername();
+        Parcel parcel = permissionService.requireParcel(parcelId);
+        if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
+        }
+        if (!permissionService.canShareParcel(parcel, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only share parcels you manage");
+        }
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        ParcelShareRole resolvedRole = ParcelShareRole.valueOf(role.toUpperCase());
+
+        ParcelShare share = parcelShareRepository.findByParcelIdAndUserUsername(parcelId, username)
+                .orElseGet(ParcelShare::new);
+        share.setParcel(parcel);
+        share.setUser(user);
+        share.setRole(resolvedRole);
+        if (share.getCreatedAt() == null) share.setCreatedAt(LocalDateTime.now());
+        ParcelShare saved = parcelShareRepository.save(share);
+        return new yt.wer.efms.dto.ParcelShareDto(saved.getUser().getId(), saved.getUser().getUsername(), saved.getRole().name());
+    }
+
+    public Optional<yt.wer.efms.dto.ParcelShareDto> updateParcelShare(Long farmId, Long parcelId, Long userId, String role) {
+        String current = permissionService.currentUsername();
+        Parcel parcel = permissionService.requireParcel(parcelId);
+        if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
+        }
+        if (!permissionService.canShareParcel(parcel, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only share parcels you manage");
+        }
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        ParcelShareRole resolvedRole = ParcelShareRole.valueOf(role.toUpperCase());
+        return parcelShareRepository.findByParcelIdAndUserUsername(parcelId, user.getUsername()).map(share -> {
+            share.setRole(resolvedRole);
+            ParcelShare saved = parcelShareRepository.save(share);
+            return new yt.wer.efms.dto.ParcelShareDto(saved.getUser().getId(), saved.getUser().getUsername(), saved.getRole().name());
+        });
+    }
+
+    public void removeParcelShare(Long farmId, Long parcelId, Long userId) {
+        String current = permissionService.currentUsername();
+        Parcel parcel = permissionService.requireParcel(parcelId);
+        if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
+        }
+        if (!permissionService.canShareParcel(parcel, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only share parcels you manage");
+        }
+        parcelShareRepository.deleteByParcelIdAndUserId(parcelId, userId);
     }
 }

@@ -13,6 +13,8 @@ public class FarmDto {
     private Boolean showLocation;
     private LocalDateTime createdAt;
     private LocalDateTime modifiedAt;
+    private Boolean canEdit;
+    private Boolean canManage;
 
     public FarmDto() {}
 
@@ -60,4 +62,10 @@ public class FarmDto {
 
     public LocalDateTime getModifiedAt() { return modifiedAt; }
     public void setModifiedAt(LocalDateTime modifiedAt) { this.modifiedAt = modifiedAt; }
+
+    public Boolean getCanEdit() { return canEdit; }
+    public void setCanEdit(Boolean canEdit) { this.canEdit = canEdit; }
+
+    public Boolean getCanManage() { return canManage; }
+    public void setCanManage(Boolean canManage) { this.canManage = canManage; }
 }

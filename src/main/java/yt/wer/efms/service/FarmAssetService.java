@@ -25,24 +25,27 @@ public class FarmAssetService {
     private final FarmRepository farmRepository;
     private final ProductRepository productRepository;
     private final ToolRepository toolRepository;
+    private final PermissionService permissionService;
 
     public FarmAssetService(FarmRepository farmRepository,
                             ProductRepository productRepository,
-                            ToolRepository toolRepository) {
+                            ToolRepository toolRepository,
+                            PermissionService permissionService) {
         this.farmRepository = farmRepository;
         this.productRepository = productRepository;
         this.toolRepository = toolRepository;
+        this.permissionService = permissionService;
     }
 
     public List<ProductDto> listProducts(Long farmId) {
-        requireOwnedFarm(farmId);
+        requireFarmView(farmId);
         return productRepository.findByFarmId(farmId).stream()
                 .map(this::toProductDto)
                 .collect(Collectors.toList());
     }
 
     public Optional<ProductDto> createProduct(Long farmId, ProductInput input) {
-        Farm farm = requireOwnedFarm(farmId);
+        Farm farm = requireFarmEdit(farmId);
         Product p = new Product();
         p.setName(input.getName());
         p.setFarm(farm);
@@ -54,7 +57,7 @@ public class FarmAssetService {
     }
 
     public Optional<ProductDto> updateProduct(Long farmId, Long productId, ProductInput input) {
-        requireOwnedFarm(farmId);
+        requireFarmEdit(farmId);
         return productRepository.findById(productId).map(existing -> {
             if (existing.getFarm() == null || !existing.getFarm().getId().equals(farmId)) {
                 throw new RuntimeException("Product does not belong to this farm");
@@ -66,7 +69,7 @@ public class FarmAssetService {
     }
 
     public void deleteProduct(Long farmId, Long productId) {
-        requireOwnedFarm(farmId);
+        requireFarmEdit(farmId);
         productRepository.findById(productId).ifPresent(p -> {
             if (p.getFarm() != null && p.getFarm().getId().equals(farmId)) {
                 productRepository.delete(p);
@@ -75,14 +78,14 @@ public class FarmAssetService {
     }
 
     public List<ToolDto> listTools(Long farmId) {
-        requireOwnedFarm(farmId);
+        requireFarmView(farmId);
         return toolRepository.findByFarmId(farmId).stream()
                 .map(this::toToolDto)
                 .collect(Collectors.toList());
     }
 
     public Optional<ToolDto> createTool(Long farmId, ToolInput input) {
-        Farm farm = requireOwnedFarm(farmId);
+        Farm farm = requireFarmEdit(farmId);
         Tool tool = new Tool();
         tool.setName(input.getName());
         tool.setFarm(farm);
@@ -93,7 +96,7 @@ public class FarmAssetService {
     }
 
     public Optional<ToolDto> updateTool(Long farmId, Long toolId, ToolInput input) {
-        requireOwnedFarm(farmId);
+        requireFarmEdit(farmId);
         return toolRepository.findById(toolId).map(existing -> {
             if (existing.getFarm() == null || !existing.getFarm().getId().equals(farmId)) {
                 throw new RuntimeException("Tool does not belong to this farm");
@@ -105,7 +108,7 @@ public class FarmAssetService {
     }
 
     public void deleteTool(Long farmId, Long toolId) {
-        requireOwnedFarm(farmId);
+        requireFarmEdit(farmId);
         toolRepository.findById(toolId).ifPresent(t -> {
             if (t.getFarm() != null && t.getFarm().getId().equals(farmId)) {
                 toolRepository.delete(t);
@@ -136,13 +139,19 @@ public class FarmAssetService {
         );
     }
 
-    private Farm requireOwnedFarm(Long farmId) {
-        String username = null;
-        try { username = SecurityContextHolder.getContext().getAuthentication().getName(); } catch (Exception ignored) {}
-        Farm farm = farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));
-        if (farm.getOwner() == null || username == null || !username.equals(farm.getOwner().getUsername())) {
-            throw new RuntimeException("You can only manage assets for your own farms");
+    private Farm requireFarmView(Long farmId) {
+        String username = permissionService.currentUsername();
+        if (!permissionService.canViewFarm(farmId, username)) {
+            throw new RuntimeException("You can only view assets for farms you can access");
         }
-        return farm;
+        return farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));
+    }
+
+    private Farm requireFarmEdit(Long farmId) {
+        String username = permissionService.currentUsername();
+        if (!permissionService.canEditFarm(farmId, username)) {
+            throw new RuntimeException("You can only manage assets for farms you can edit");
+        }
+        return farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));
     }
 }

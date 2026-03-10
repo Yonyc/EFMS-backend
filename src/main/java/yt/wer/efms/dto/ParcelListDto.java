@@ -9,6 +9,8 @@ public class ParcelListDto {
     private Long periodId;
     private String validationStatus;
     private Long convertedParcelId;
+    private Boolean canEdit;
+    private Boolean canShare;
 
     public ParcelListDto() {}
 
@@ -35,4 +37,10 @@ public class ParcelListDto {
 
     public Long getConvertedParcelId() { return convertedParcelId; }
     public void setConvertedParcelId(Long convertedParcelId) { this.convertedParcelId = convertedParcelId; }
+
+    public Boolean getCanEdit() { return canEdit; }
+    public void setCanEdit(Boolean canEdit) { this.canEdit = canEdit; }
+
+    public Boolean getCanShare() { return canShare; }
+    public void setCanShare(Boolean canShare) { this.canShare = canShare; }
 }

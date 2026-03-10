@@ -13,6 +13,8 @@ public class ParcelDto {
     private Long farmId;
     private Long correspondingPacId;
     private Long periodId;
+    private Boolean canEdit;
+    private Boolean canShare;
 
     public ParcelDto() {}
 
@@ -62,4 +64,10 @@ public class ParcelDto {
 
     public Long getPeriodId() { return periodId; }
     public void setPeriodId(Long periodId) { this.periodId = periodId; }
+
+    public Boolean getCanEdit() { return canEdit; }
+    public void setCanEdit(Boolean canEdit) { this.canEdit = canEdit; }
+
+    public Boolean getCanShare() { return canShare; }
+    public void setCanShare(Boolean canShare) { this.canShare = canShare; }
 }

@@ -19,7 +19,7 @@ public class FarmUser {
     @JoinColumn(name = "\"user\"")
     private User user;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = RoleConverter.class)
     @Column(name = "role")
     private Role role;
 
