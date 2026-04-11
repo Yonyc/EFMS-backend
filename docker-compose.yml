@@ -36,11 +36,11 @@ services:
     networks:
       - efms-network
     environment:
-      DB_HOST: postgres-db
+      DB_HOST: postgres
       DB_NAME: ${DB_NAME:-efms_db}
       DB_USER: ${DB_USER:-efms}
       DB_PASS: ${DB_PASS}
-      DB_URL: jdbc:postgresql://postgres-db:5432/${DB_NAME:-efms_db}
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-efms_db}
       SPRING_PROFILES_ACTIVE: prod
       JWT_SECRET: ${JWT_SECRET}
     ports:

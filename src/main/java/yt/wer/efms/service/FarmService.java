@@ -322,6 +322,15 @@ public class FarmService {
             parcel.setPeriod(period);
         }
 
+        if (request.getParentParcelId() != null) {
+            Parcel parent = parcelRepository.findById(request.getParentParcelId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Parent parcel not found"));
+            if (parent.getFarm() == null || !parent.getFarm().getId().equals(farmId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parent parcel does not belong to this farm");
+            }
+            parcel.setParentParcel(parent);
+        }
+
         Parcel saved = parcelRepository.save(parcel);
         return toParcelDto(saved);
     }
@@ -413,6 +422,15 @@ public class FarmService {
                 parcel.setPeriod(period);
             }
 
+            if (request.getParentParcelId() != null) {
+                Parcel parent = parcelRepository.findById(request.getParentParcelId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Parent parcel not found"));
+                if (parent.getFarm() == null || !parent.getFarm().getId().equals(farmId)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parent parcel does not belong to this farm");
+                }
+                parcel.setParentParcel(parent);
+            }
+
             Parcel saved = parcelRepository.save(parcel);
             return toParcelDto(saved);
         });
@@ -442,6 +460,9 @@ public class FarmService {
         }
         if (p.getPeriod() != null) {
             dto.setPeriodId(p.getPeriod().getId());
+        }
+        if (p.getParentParcel() != null) {
+            dto.setParentParcelId(p.getParentParcel().getId());
         }
         dto.setCanEdit(permissionService.canEditParcel(p, username));
         dto.setCanShare(permissionService.canShareParcel(p, username));

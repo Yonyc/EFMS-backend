@@ -15,6 +15,7 @@ public class ParcelDto {
     private Long periodId;
     private Boolean canEdit;
     private Boolean canShare;
+    private Long parentParcelId;
 
     public ParcelDto() {}
 
@@ -70,4 +71,7 @@ public class ParcelDto {
 
     public Boolean getCanShare() { return canShare; }
     public void setCanShare(Boolean canShare) { this.canShare = canShare; }
+
+    public Long getParentParcelId() { return parentParcelId; }
+    public void setParentParcelId(Long parentParcelId) { this.parentParcelId = parentParcelId; }
 }

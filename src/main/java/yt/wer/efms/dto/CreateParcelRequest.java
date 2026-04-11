@@ -11,6 +11,7 @@ public class CreateParcelRequest {
     private String color;
     private Long correspondingPacId;
     private Long periodId;
+    private Long parentParcelId;
 
     public CreateParcelRequest() {}
 
@@ -37,4 +38,7 @@ public class CreateParcelRequest {
 
     public Long getPeriodId() { return periodId; }
     public void setPeriodId(Long periodId) { this.periodId = periodId; }
+
+    public Long getParentParcelId() { return parentParcelId; }
+    public void setParentParcelId(Long parentParcelId) { this.parentParcelId = parentParcelId; }
 }
