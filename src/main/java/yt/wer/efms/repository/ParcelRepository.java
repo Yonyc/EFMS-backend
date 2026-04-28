@@ -25,18 +25,21 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long> {
 			"LEFT JOIN parcel_operations po ON po.id = ppo.parcel_operations_parcels " +
 			"LEFT JOIN operation_products op ON op.operation = po.id " +
 			"WHERE p.farm = :farmId " +
-			"AND (CAST(:periodId AS bigint) IS NULL OR p.period = CAST(:periodId AS bigint)) " +
-			"AND (CAST(:toolId AS bigint) IS NULL OR op.tool = CAST(:toolId AS bigint)) " +
-			"AND (CAST(:productId AS bigint) IS NULL OR op.product = CAST(:productId AS bigint)) " +
+			"AND (:periodFilter = false OR p.period IN (:periodIds)) " +
+			"AND (:toolFilter = false OR op.tool IN (:toolIds)) " +
+			"AND (:productFilter = false OR op.product IN (:productIds)) " +
 			"AND (CAST(:startDate AS timestamp) IS NULL OR po.date >= CAST(:startDate AS timestamp)) " +
 			"AND (CAST(:endDate AS timestamp) IS NULL OR po.date <= CAST(:endDate AS timestamp)) " +
 			"AND (CAST(:polygonWkt AS text) IS NULL OR (p.geodata IS NOT NULL AND ST_Intersects(ST_SetSRID(p.geodata, 4326), ST_GeomFromText(CAST(:polygonWkt AS text), 4326)))) " +
 			"AND (CAST(:minLng AS double precision) IS NULL OR (p.geodata IS NOT NULL AND ST_Intersects(ST_SetSRID(p.geodata, 4326), ST_MakeEnvelope(CAST(:minLng AS double precision), CAST(:minLat AS double precision), CAST(:maxLng AS double precision), CAST(:maxLat AS double precision), 4326))))",
 		nativeQuery = true)
 	List<Parcel> searchParcels(@Param("farmId") Long farmId,
-						  @Param("periodId") Long periodId,
-						  @Param("toolId") Long toolId,
-						  @Param("productId") Long productId,
+						  @Param("periodFilter") boolean periodFilter,
+						  @Param("periodIds") List<Long> periodIds,
+						  @Param("toolFilter") boolean toolFilter,
+						  @Param("toolIds") List<Long> toolIds,
+						  @Param("productFilter") boolean productFilter,
+						  @Param("productIds") List<Long> productIds,
 						  @Param("startDate") LocalDateTime startDate,
 						  @Param("endDate") LocalDateTime endDate,
 						  @Param("polygonWkt") String polygonWkt,

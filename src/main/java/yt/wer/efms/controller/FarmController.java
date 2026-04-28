@@ -6,6 +6,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import yt.wer.efms.dto.CreateParcelRequest;
 import yt.wer.efms.dto.CreatePeriodRequest;
+import yt.wer.efms.dto.ClaimResearchZoneShareRequest;
 import yt.wer.efms.dto.FarmMemberDto;
 import yt.wer.efms.dto.FarmMemberRequest;
 import yt.wer.efms.dto.FarmDto;
@@ -14,12 +15,16 @@ import yt.wer.efms.dto.ParcelListDto;
 import yt.wer.efms.dto.ParcelShareDto;
 import yt.wer.efms.dto.ParcelShareRequest;
 import yt.wer.efms.dto.PeriodDto;
+import yt.wer.efms.dto.ResearchZoneShareDto;
+import yt.wer.efms.dto.ResearchZoneShareRequest;
 import yt.wer.efms.service.FarmService;
 import yt.wer.efms.service.PermissionService;
 
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/farm")
@@ -75,32 +80,39 @@ public class FarmController {
     }
 
     @GetMapping("/{id}/parcels")
-    public ResponseEntity<List<ParcelDto>> listParcels(@PathVariable Long id) {
-        List<ParcelDto> parcels = farmService.listParcels(id);
+    public ResponseEntity<List<ParcelDto>> listParcels(@PathVariable Long id,
+                                                       @RequestParam(required = false) String shareToken) {
+        List<ParcelDto> parcels = farmService.listParcels(id, shareToken);
         return ResponseEntity.ok(parcels);
     }
 
     @GetMapping("/{id}/parcels/all")
-    public ResponseEntity<List<ParcelListDto>> listParcelsAll(@PathVariable Long id) {
-        List<ParcelListDto> parcels = farmService.listParcelSummaries(id);
+    public ResponseEntity<List<ParcelListDto>> listParcelsAll(@PathVariable Long id,
+                                                               @RequestParam(required = false) String shareToken) {
+        List<ParcelListDto> parcels = farmService.listParcelSummaries(id, shareToken);
         return ResponseEntity.ok(parcels);
     }
 
     @GetMapping("/{id}/parcels/viewport")
     public ResponseEntity<List<ParcelDto>> listParcelsViewport(@PathVariable Long id,
+                                                               @RequestParam(required = false) String shareToken,
                                                                @RequestParam Double minLat,
                                                                @RequestParam Double minLng,
                                                                @RequestParam Double maxLat,
                                                                @RequestParam Double maxLng) {
-        List<ParcelDto> parcels = farmService.listParcelsWithinBounds(id, minLat, minLng, maxLat, maxLng);
+        List<ParcelDto> parcels = farmService.listParcelsWithinBounds(id, minLat, minLng, maxLat, maxLng, shareToken);
         return ResponseEntity.ok(parcels);
     }
 
     @GetMapping("/{id}/parcels/search")
     public ResponseEntity<List<ParcelDto>> searchParcels(@PathVariable Long id,
+                                                         @RequestParam(required = false) String shareToken,
                                                          @RequestParam(required = false) Long periodId,
+                                                         @RequestParam(required = false) List<Long> periodIds,
                                                          @RequestParam(required = false) Long toolId,
+                                                         @RequestParam(required = false) List<Long> toolIds,
                                                          @RequestParam(required = false) Long productId,
+                                                         @RequestParam(required = false) List<Long> productIds,
                                                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
                                                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
                                                          @RequestParam(required = false) String polygonWkt,
@@ -108,8 +120,94 @@ public class FarmController {
                                                          @RequestParam(required = false) Double minLng,
                                                          @RequestParam(required = false) Double maxLat,
                                                          @RequestParam(required = false) Double maxLng) {
-        List<ParcelDto> parcels = farmService.searchParcels(id, periodId, toolId, productId, startDate, endDate, polygonWkt, minLat, minLng, maxLat, maxLng);
+        Set<Long> resolvedPeriodIds = mergeFilterValues(periodId, periodIds);
+        Set<Long> resolvedToolIds = mergeFilterValues(toolId, toolIds);
+        Set<Long> resolvedProductIds = mergeFilterValues(productId, productIds);
+
+        List<ParcelDto> parcels = farmService.searchParcels(
+                id,
+                resolvedPeriodIds,
+                resolvedToolIds,
+                resolvedProductIds,
+                startDate,
+                endDate,
+                polygonWkt,
+                minLat,
+                minLng,
+                maxLat,
+                maxLng,
+                shareToken
+        );
         return ResponseEntity.ok(parcels);
+    }
+
+    private Set<Long> mergeFilterValues(Long singleValue, List<Long> multiValues) {
+        LinkedHashSet<Long> merged = new LinkedHashSet<>();
+        if (multiValues != null) {
+            for (Long value : multiValues) {
+                if (value != null) {
+                    merged.add(value);
+                }
+            }
+        }
+        if (singleValue != null) {
+            merged.add(singleValue);
+        }
+        return merged.isEmpty() ? null : merged;
+    }
+
+    @GetMapping("/{id}/research-shares")
+    public ResponseEntity<List<ResearchZoneShareDto>> listResearchZoneShares(@PathVariable Long id) {
+        return ResponseEntity.ok(farmService.listResearchZoneShares(id));
+    }
+
+    @GetMapping("/{id}/research-shares/enrolled")
+    public ResponseEntity<List<ResearchZoneShareDto>> listEnrolledResearchZoneShares(@PathVariable Long id) {
+        return ResponseEntity.ok(farmService.listEnrolledResearchZoneShares(id));
+    }
+
+    @PostMapping("/{id}/research-shares")
+    public ResponseEntity<ResearchZoneShareDto> addResearchZoneShare(@PathVariable Long id,
+                                                                      @RequestBody ResearchZoneShareRequest request) {
+        ResearchZoneShareDto created = farmService.addResearchZoneShare(id, request);
+        return ResponseEntity.created(URI.create("/farm/" + id + "/research-shares/" + created.getId())).body(created);
+    }
+
+    @PutMapping("/{id}/research-shares/{shareId}")
+    public ResponseEntity<ResearchZoneShareDto> updateResearchZoneShare(@PathVariable Long id,
+                                                                         @PathVariable Long shareId,
+                                                                         @RequestBody ResearchZoneShareRequest request) {
+        return farmService.updateResearchZoneShare(id, shareId, request)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/{id}/research-shares/claim")
+    public ResponseEntity<ResearchZoneShareDto> claimResearchZoneShare(@PathVariable Long id,
+                                                                        @RequestBody ClaimResearchZoneShareRequest request) {
+        return farmService.claimResearchZoneShare(id, request.getToken())
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}/research-shares/{shareId}")
+    public ResponseEntity<Void> removeResearchZoneShare(@PathVariable Long id, @PathVariable Long shareId) {
+        farmService.removeResearchZoneShare(id, shareId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/research-shares/{shareId}/enrollment")
+    public ResponseEntity<ResearchZoneShareDto> leaveResearchZoneShare(@PathVariable Long id, @PathVariable Long shareId) {
+        return farmService.leaveResearchZoneShare(id, shareId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/research-shares/resolve")
+    public ResponseEntity<ResearchZoneShareDto> resolveResearchZoneShare(@RequestParam String token) {
+        return farmService.resolveResearchZoneShare(token)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{id}/parcels")

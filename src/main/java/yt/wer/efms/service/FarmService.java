@@ -18,6 +18,10 @@ import yt.wer.efms.model.FarmUser;
 import yt.wer.efms.model.FarmUserId;
 import yt.wer.efms.model.Role;
 import yt.wer.efms.model.ParcelShareRole;
+import yt.wer.efms.model.ResearchZoneShare;
+import yt.wer.efms.model.ResearchZoneShareClaim;
+import yt.wer.efms.model.Tool;
+import yt.wer.efms.model.Product;
 import yt.wer.efms.model.User;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
@@ -26,15 +30,25 @@ import yt.wer.efms.repository.ImportedParcelRepository;
 import yt.wer.efms.repository.ParcelRepository;
 import yt.wer.efms.repository.PeriodRepository;
 import yt.wer.efms.repository.ParcelShareRepository;
+import yt.wer.efms.repository.ResearchZoneShareRepository;
+import yt.wer.efms.repository.ResearchZoneShareClaimRepository;
 import yt.wer.efms.repository.UserRepository;
 import yt.wer.efms.repository.FarmUserRepository;
+import yt.wer.efms.repository.ToolRepository;
+import yt.wer.efms.repository.ProductRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,8 +60,12 @@ public class FarmService {
     private final ImportedParcelRepository importedParcelRepository;
     private final PeriodRepository periodRepository;
     private final ParcelShareRepository parcelShareRepository;
+    private final ResearchZoneShareRepository researchZoneShareRepository;
+    private final ResearchZoneShareClaimRepository researchZoneShareClaimRepository;
     private final PermissionService permissionService;
     private final FarmUserRepository farmUserRepository;
+    private final ToolRepository toolRepository;
+    private final ProductRepository productRepository;
     private final WKTReader wktReader = new WKTReader();
     private final WKTWriter wktWriter = new WKTWriter();
 
@@ -55,16 +73,24 @@ public class FarmService {
                        UserRepository userRepository, ImportedParcelRepository importedParcelRepository,
                        PeriodRepository periodRepository,
                        ParcelShareRepository parcelShareRepository,
+                       ResearchZoneShareRepository researchZoneShareRepository,
+                       ResearchZoneShareClaimRepository researchZoneShareClaimRepository,
                        PermissionService permissionService,
-                       FarmUserRepository farmUserRepository) {
+                       FarmUserRepository farmUserRepository,
+                       ToolRepository toolRepository,
+                       ProductRepository productRepository) {
         this.farmRepository = farmRepository;
         this.parcelRepository = parcelRepository;
         this.userRepository = userRepository;
         this.importedParcelRepository = importedParcelRepository;
         this.periodRepository = periodRepository;
         this.parcelShareRepository = parcelShareRepository;
+        this.researchZoneShareRepository = researchZoneShareRepository;
+        this.researchZoneShareClaimRepository = researchZoneShareClaimRepository;
         this.permissionService = permissionService;
         this.farmUserRepository = farmUserRepository;
+        this.toolRepository = toolRepository;
+        this.productRepository = productRepository;
     }
 
     public List<FarmDto> listAll() {
@@ -84,7 +110,17 @@ public class FarmService {
             .filter(farm -> farm != null)
             .distinct()
             .collect(Collectors.toList());
-        return java.util.stream.Stream.of(owned, memberFarms, sharedFarms)
+        List<Farm> researchSharedFarms = researchZoneShareRepository.findByUserUsername(username).stream()
+            .filter(this::isResearchShareActive)
+            .map(ResearchZoneShare::getFarm)
+            .filter(farm -> farm != null)
+            .distinct()
+            .collect(Collectors.toList());
+        List<Farm> researchClaimedFarms = researchZoneShareClaimRepository.findClaimedFarmsByUsername(username).stream()
+            .filter(farm -> farm != null)
+            .distinct()
+            .collect(Collectors.toList());
+        return java.util.stream.Stream.of(owned, memberFarms, sharedFarms, researchSharedFarms, researchClaimedFarms)
             .flatMap(List::stream)
             .distinct()
             .map(farm -> {
@@ -194,55 +230,82 @@ public class FarmService {
         return true;
     }
 
-    public List<ParcelDto> listParcels(Long farmId) {
+    public List<ParcelDto> listParcels(Long farmId, String shareToken) {
         String username = permissionService.currentUsername();
-        List<Parcel> parcels;
+        Set<Parcel> parcelSet = new HashSet<>();
         if (permissionService.canViewFarm(farmId, username)) {
-            parcels = parcelRepository.findByFarmId(farmId);
+            parcelSet.addAll(parcelRepository.findByFarmId(farmId));
         } else {
-            parcels = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
+            parcelSet.addAll(parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
                     .map(ParcelShare::getParcel)
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toSet()));
+            List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
+            parcelSet.addAll(findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null));
+            if (parcelSet.isEmpty() && !activeShares.isEmpty()) {
+                parcelSet.addAll(findParcelsFromResearchSharesFallback(farmId, activeShares));
+            }
         }
-        return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());
+        return parcelSet.stream().map(this::toParcelDto).collect(Collectors.toList());
     }
 
-    public List<ParcelListDto> listParcelSummaries(Long farmId) {
+    public List<ParcelListDto> listParcelSummaries(Long farmId, String shareToken) {
         String username = permissionService.currentUsername();
-        List<Parcel> parcels;
+        Set<Parcel> parcelSet = new HashSet<>();
         if (permissionService.canViewFarm(farmId, username)) {
-            parcels = parcelRepository.findByFarmId(farmId);
+            parcelSet.addAll(parcelRepository.findByFarmId(farmId));
         } else {
-            parcels = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
+            parcelSet.addAll(parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
                     .map(ParcelShare::getParcel)
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toSet()));
+            List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
+            parcelSet.addAll(findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null));
+            if (parcelSet.isEmpty() && !activeShares.isEmpty()) {
+                parcelSet.addAll(findParcelsFromResearchSharesFallback(farmId, activeShares));
+            }
         }
-        return parcels.stream().map(this::toParcelListDto).collect(Collectors.toList());
+        return parcelSet.stream().map(this::toParcelListDto).collect(Collectors.toList());
     }
 
-    public List<ParcelDto> listParcelsWithinBounds(Long farmId, Double minLat, Double minLng, Double maxLat, Double maxLng) {
+    public List<ParcelDto> listParcelsWithinBounds(Long farmId, Double minLat, Double minLng, Double maxLat, Double maxLng, String shareToken) {
         String username = permissionService.currentUsername();
         List<Parcel> parcels = parcelRepository.findByFarmIdWithinBounds(farmId, minLng, minLat, maxLng, maxLat);
         if (!permissionService.canViewFarm(farmId, username)) {
-            java.util.Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
+            Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
                     .map(share -> share.getParcel().getId())
                     .collect(java.util.stream.Collectors.toSet());
+            List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
+            Set<Long> zoneIds = findParcelsFromResearchShares(
+                    farmId,
+                    activeShares,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    minLat,
+                    minLng,
+                    maxLat,
+                    maxLng
+            ).stream().map(Parcel::getId).collect(Collectors.toSet());
+            allowedIds.addAll(zoneIds);
             parcels = parcels.stream().filter(p -> allowedIds.contains(p.getId())).collect(Collectors.toList());
         }
         return parcels.stream().map(this::toParcelDto).collect(Collectors.toList());
     }
 
     public List<ParcelDto> searchParcels(Long farmId,
-                                         Long periodId,
-                                         Long toolId,
-                                         Long productId,
+                                         Set<Long> periodIds,
+                                         Set<Long> toolIds,
+                                         Set<Long> productIds,
                                          LocalDate startDate,
                                          LocalDate endDate,
                                          String polygonWkt,
                                          Double minLat,
                                          Double minLng,
                                          Double maxLat,
-                                         Double maxLng) {
+                                         Double maxLng,
+                                         String shareToken) {
         String username = permissionService.currentUsername();
         LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
@@ -253,14 +316,21 @@ public class FarmService {
         Double resolvedMaxLat = hasBounds ? maxLat : null;
         Double resolvedMaxLng = hasBounds ? maxLng : null;
 
+        boolean periodFilter = periodIds != null && !periodIds.isEmpty();
+        boolean toolFilter = toolIds != null && !toolIds.isEmpty();
+        boolean productFilter = productIds != null && !productIds.isEmpty();
+
         List<Parcel> parcels = parcelRepository.searchParcels(
                 farmId,
-            periodId,
-                toolId,
-                productId,
+                periodFilter,
+                toQueryFilterValues(periodIds),
+                toolFilter,
+                toQueryFilterValues(toolIds),
+                productFilter,
+                toQueryFilterValues(productIds),
                 startDateTime,
                 endDateTime,
-            polygonWkt,
+                polygonWkt,
                 resolvedMinLng,
                 resolvedMinLat,
                 resolvedMaxLng,
@@ -268,9 +338,27 @@ public class FarmService {
         );
 
         if (!permissionService.canViewFarm(farmId, username)) {
-            java.util.Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
+            Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
                 .map(share -> share.getParcel().getId())
                 .collect(java.util.stream.Collectors.toSet());
+
+            List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
+            Set<Long> researchZoneIds = findParcelsFromResearchShares(
+                    farmId,
+                    activeShares,
+                    periodIds,
+                    toolIds,
+                    productIds,
+                    startDate,
+                    endDate,
+                    polygonWkt,
+                    minLat,
+                    minLng,
+                    maxLat,
+                    maxLng
+            ).stream().map(Parcel::getId).collect(Collectors.toSet());
+
+            allowedIds.addAll(researchZoneIds);
             parcels = parcels.stream().filter(p -> allowedIds.contains(p.getId())).collect(Collectors.toList());
         }
 
@@ -636,6 +724,620 @@ public class FarmService {
         }
         FarmUserId id = new FarmUserId(farmId, userId);
         farmUserRepository.deleteById(id);
+    }
+
+    public List<yt.wer.efms.dto.ResearchZoneShareDto> listResearchZoneShares(Long farmId) {
+        String current = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view research shares for farms you manage");
+        }
+        return researchZoneShareRepository.findByFarmId(farmId).stream()
+                .map(this::toResearchZoneShareDto)
+                .collect(Collectors.toList());
+    }
+
+    public List<yt.wer.efms.dto.ResearchZoneShareDto> listEnrolledResearchZoneShares(Long farmId) {
+        String current = permissionService.currentUsername();
+        if (current == null || current.equals("anonymousUser")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+
+        Set<ResearchZoneShare> enrolled = new LinkedHashSet<>();
+        enrolled.addAll(researchZoneShareRepository.findByFarmIdAndUserUsername(farmId, current));
+        enrolled.addAll(researchZoneShareClaimRepository.findSharesByFarmIdAndUsername(farmId, current));
+
+        return enrolled.stream()
+                .filter(this::isResearchShareActive)
+                .map(this::toResearchZoneShareDto)
+                .collect(Collectors.toList());
+    }
+
+    public yt.wer.efms.dto.ResearchZoneShareDto addResearchZoneShare(Long farmId, yt.wer.efms.dto.ResearchZoneShareRequest request) {
+        String current = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only create research shares for farms you manage");
+        }
+
+        if (request.getZoneWkt() == null || request.getZoneWkt().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "zoneWkt is required");
+        }
+        try {
+            wktReader.read(request.getZoneWkt());
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid zoneWkt", e);
+        }
+
+        Farm farm = farmRepository.findById(farmId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        User creator = userRepository.findByUsername(current)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
+
+        User recipient = null;
+        if (request.getUsername() != null && !request.getUsername().isBlank()) {
+            recipient = userRepository.findByUsername(request.getUsername().trim())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Recipient user not found"));
+        }
+
+        Set<Long> periodIds = resolveRequestedIds(request.getPeriodId(), request.getPeriodIds());
+        Set<Long> toolIds = resolveRequestedIds(request.getToolId(), request.getToolIds());
+        Set<Long> productIds = resolveRequestedIds(request.getProductId(), request.getProductIds());
+
+        for (Long periodId : periodIds) {
+            Period period = periodRepository.findById(periodId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Period not found"));
+            if (period.getFarm() == null || !period.getFarm().getId().equals(farmId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Period does not belong to this farm");
+            }
+        }
+
+        for (Long toolId : toolIds) {
+            Tool tool = toolRepository.findById(toolId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tool not found"));
+            if (tool.getFarm() == null || !tool.getFarm().getId().equals(farmId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tool does not belong to this farm");
+            }
+        }
+
+        for (Long productId : productIds) {
+            Product product = productRepository.findById(productId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+            if (product.getFarm() == null || !product.getFarm().getId().equals(farmId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product does not belong to this farm");
+            }
+        }
+
+        if (request.getFilterStartDate() != null && request.getFilterEndDate() != null
+                && request.getFilterStartDate().isAfter(request.getFilterEndDate())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "filterStartDate cannot be after filterEndDate");
+        }
+
+        if (request.getMaxUsers() != null && request.getMaxUsers() < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "maxUsers must be greater than 0");
+        }
+
+        LocalDateTime shareStartAt = request.getShareStartAt() != null ? request.getShareStartAt() : LocalDateTime.now();
+        if (request.getShareEndAt() != null && request.getShareEndAt().isBefore(shareStartAt)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "shareEndAt cannot be before shareStartAt");
+        }
+
+        ResearchZoneShare share = new ResearchZoneShare();
+        share.setFarm(farm);
+        share.setCreatedBy(creator);
+        share.setUser(recipient);
+        share.setZoneWkt(request.getZoneWkt());
+        share.setShareToken(generateShareToken());
+        share.setPeriod(periodIds.size() == 1 ? periodRepository.findById(periodIds.iterator().next()).orElse(null) : null);
+        share.setTool(toolIds.size() == 1 ? toolRepository.findById(toolIds.iterator().next()).orElse(null) : null);
+        share.setProduct(productIds.size() == 1 ? productRepository.findById(productIds.iterator().next()).orElse(null) : null);
+        share.setPeriodIds(toCsv(periodIds));
+        share.setToolIds(toCsv(toolIds));
+        share.setProductIds(toCsv(productIds));
+        share.setFilterStartDate(request.getFilterStartDate());
+        share.setFilterEndDate(request.getFilterEndDate());
+        share.setShareStartAt(shareStartAt);
+        share.setShareEndAt(request.getShareEndAt());
+        share.setMaxUsers(request.getMaxUsers());
+        share.setCreatedAt(LocalDateTime.now());
+        share.setModifiedAt(LocalDateTime.now());
+
+        ResearchZoneShare saved = researchZoneShareRepository.save(share);
+        return toResearchZoneShareDto(saved);
+    }
+
+    public Optional<yt.wer.efms.dto.ResearchZoneShareDto> updateResearchZoneShare(Long farmId,
+                                                                                     Long shareId,
+                                                                                     yt.wer.efms.dto.ResearchZoneShareRequest request) {
+        String current = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update research shares for farms you manage");
+        }
+
+        return researchZoneShareRepository.findById(shareId).map(share -> {
+            if (share.getFarm() == null || !share.getFarm().getId().equals(farmId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Research share does not belong to this farm");
+            }
+
+            if (request.getZoneWkt() != null && !request.getZoneWkt().isBlank()) {
+                try {
+                    wktReader.read(request.getZoneWkt());
+                } catch (Exception e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid zoneWkt", e);
+                }
+                share.setZoneWkt(request.getZoneWkt());
+            }
+
+            if (request.getUsername() != null) {
+                if (request.getUsername().isBlank()) {
+                    share.setUser(null);
+                } else {
+                    User recipient = userRepository.findByUsername(request.getUsername().trim())
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Recipient user not found"));
+                    share.setUser(recipient);
+                }
+            }
+
+            Set<Long> periodIds = resolveRequestedIds(request.getPeriodId(), request.getPeriodIds());
+            Set<Long> toolIds = resolveRequestedIds(request.getToolId(), request.getToolIds());
+            Set<Long> productIds = resolveRequestedIds(request.getProductId(), request.getProductIds());
+
+            for (Long periodId : periodIds) {
+                Period period = periodRepository.findById(periodId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Period not found"));
+                if (period.getFarm() == null || !period.getFarm().getId().equals(farmId)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Period does not belong to this farm");
+                }
+            }
+
+            for (Long toolId : toolIds) {
+                Tool tool = toolRepository.findById(toolId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tool not found"));
+                if (tool.getFarm() == null || !tool.getFarm().getId().equals(farmId)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tool does not belong to this farm");
+                }
+            }
+
+            for (Long productId : productIds) {
+                Product product = productRepository.findById(productId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+                if (product.getFarm() == null || !product.getFarm().getId().equals(farmId)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product does not belong to this farm");
+                }
+            }
+
+            if (request.getFilterStartDate() != null && request.getFilterEndDate() != null
+                    && request.getFilterStartDate().isAfter(request.getFilterEndDate())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "filterStartDate cannot be after filterEndDate");
+            }
+
+            if (request.getMaxUsers() != null && request.getMaxUsers() < 1) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "maxUsers must be greater than 0");
+            }
+
+            LocalDateTime shareStartAt = request.getShareStartAt();
+            if (request.getShareEndAt() != null && shareStartAt != null && request.getShareEndAt().isBefore(shareStartAt)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "shareEndAt cannot be before shareStartAt");
+            }
+
+            share.setPeriod(periodIds.size() == 1 ? periodRepository.findById(periodIds.iterator().next()).orElse(null) : null);
+            share.setTool(toolIds.size() == 1 ? toolRepository.findById(toolIds.iterator().next()).orElse(null) : null);
+            share.setProduct(productIds.size() == 1 ? productRepository.findById(productIds.iterator().next()).orElse(null) : null);
+            share.setPeriodIds(toCsv(periodIds));
+            share.setToolIds(toCsv(toolIds));
+            share.setProductIds(toCsv(productIds));
+            share.setFilterStartDate(request.getFilterStartDate());
+            share.setFilterEndDate(request.getFilterEndDate());
+            share.setShareStartAt(request.getShareStartAt());
+            share.setShareEndAt(request.getShareEndAt());
+            share.setMaxUsers(request.getMaxUsers());
+            share.setModifiedAt(LocalDateTime.now());
+
+            ResearchZoneShare saved = researchZoneShareRepository.save(share);
+            return toResearchZoneShareDto(saved);
+        });
+    }
+
+    public Optional<yt.wer.efms.dto.ResearchZoneShareDto> claimResearchZoneShare(Long farmId, String token) {
+        String current = permissionService.currentUsername();
+        if (current == null || current.equals("anonymousUser")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        if (token == null || token.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "token is required");
+        }
+
+        User currentUser = userRepository.findByUsername(current)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
+
+        return researchZoneShareRepository.findByShareToken(token.trim()).map(share -> {
+            if (share.getFarm() == null || !share.getFarm().getId().equals(farmId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Share does not belong to this farm");
+            }
+            if (!isResearchShareActive(share)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Share is not active");
+            }
+            if (share.getUser() != null && !share.getUser().getId().equals(currentUser.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Share is assigned to another user");
+            }
+            enforceShareClaimLimit(share, currentUser);
+            return toResearchZoneShareDto(share);
+        });
+    }
+
+    public Optional<yt.wer.efms.dto.ResearchZoneShareDto> resolveResearchZoneShare(String token) {
+        String current = permissionService.currentUsername();
+        if (current == null || current.equals("anonymousUser")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        if (token == null || token.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "token is required");
+        }
+
+        User currentUser = userRepository.findByUsername(current)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
+
+        return researchZoneShareRepository.findByShareToken(token.trim()).map(share -> {
+            if (!isResearchShareActive(share)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Share is not active");
+            }
+            if (share.getUser() != null && !share.getUser().getId().equals(currentUser.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Share is assigned to another user");
+            }
+            enforceShareClaimLimit(share, currentUser);
+            return toResearchZoneShareDto(share);
+        });
+    }
+
+    public void removeResearchZoneShare(Long farmId, Long shareId) {
+        String current = permissionService.currentUsername();
+        if (!permissionService.canManageFarm(farmId, current)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only remove research shares for farms you manage");
+        }
+
+        ResearchZoneShare share = researchZoneShareRepository.findById(shareId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Research share not found"));
+        if (share.getFarm() == null || !share.getFarm().getId().equals(farmId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Research share does not belong to this farm");
+        }
+        researchZoneShareRepository.deleteById(shareId);
+    }
+
+    public Optional<yt.wer.efms.dto.ResearchZoneShareDto> leaveResearchZoneShare(Long farmId, Long shareId) {
+        String current = permissionService.currentUsername();
+        if (current == null || current.equals("anonymousUser")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        User currentUser = userRepository.findByUsername(current)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
+
+        return researchZoneShareRepository.findById(shareId).map(share -> {
+            if (share.getFarm() == null || !share.getFarm().getId().equals(farmId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Research share does not belong to this farm");
+            }
+
+            boolean changed = false;
+            if (share.getUser() != null && share.getUser().getId().equals(currentUser.getId())) {
+                share.setUser(null);
+                changed = true;
+            }
+
+            Optional<ResearchZoneShareClaim> claim = researchZoneShareClaimRepository.findByShareIdAndUserId(share.getId(), currentUser.getId());
+            if (claim.isPresent()) {
+                researchZoneShareClaimRepository.delete(claim.get());
+                changed = true;
+            }
+
+            if (!changed) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not enrolled in this share");
+            }
+
+            share.setModifiedAt(LocalDateTime.now());
+            ResearchZoneShare saved = researchZoneShareRepository.save(share);
+            return toResearchZoneShareDto(saved);
+        });
+    }
+
+    private yt.wer.efms.dto.ResearchZoneShareDto toResearchZoneShareDto(ResearchZoneShare share) {
+        List<Long> periodIds = toSortedList(getShareFilterIds(share.getPeriodIds(), share.getPeriod() != null ? share.getPeriod().getId() : null));
+        List<Long> toolIds = toSortedList(getShareFilterIds(share.getToolIds(), share.getTool() != null ? share.getTool().getId() : null));
+        List<Long> productIds = toSortedList(getShareFilterIds(share.getProductIds(), share.getProduct() != null ? share.getProduct().getId() : null));
+        LinkedHashSet<String> accessUsers = new LinkedHashSet<>();
+        if (share.getUser() != null && share.getUser().getUsername() != null) {
+            accessUsers.add(share.getUser().getUsername());
+        }
+        accessUsers.addAll(researchZoneShareClaimRepository.findClaimedUsernamesByShareId(share.getId()));
+
+        return new yt.wer.efms.dto.ResearchZoneShareDto(
+                share.getId(),
+                share.getFarm() != null ? share.getFarm().getId() : null,
+                share.getUser() != null ? share.getUser().getId() : null,
+                share.getUser() != null ? share.getUser().getUsername() : null,
+                share.getShareToken(),
+                share.getZoneWkt(),
+            periodIds.size() == 1 ? periodIds.get(0) : null,
+            periodIds,
+            toolIds.size() == 1 ? toolIds.get(0) : null,
+            toolIds,
+            productIds.size() == 1 ? productIds.get(0) : null,
+            productIds,
+                share.getFilterStartDate(),
+                share.getFilterEndDate(),
+                share.getShareStartAt(),
+                share.getShareEndAt(),
+                share.getMaxUsers(),
+                researchZoneShareClaimRepository.countDistinctUsersByShareId(share.getId()),
+                new ArrayList<>(accessUsers),
+                share.getCreatedAt()
+        );
+    }
+
+    private String generateShareToken() {
+        String token;
+        do {
+            token = UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "");
+        } while (researchZoneShareRepository.findByShareToken(token).isPresent());
+        return token;
+    }
+
+    private boolean isResearchShareActive(ResearchZoneShare share) {
+        LocalDateTime now = LocalDateTime.now();
+        if (share.getShareStartAt() != null && now.isBefore(share.getShareStartAt())) return false;
+        if (share.getShareEndAt() != null && now.isAfter(share.getShareEndAt())) return false;
+        return true;
+    }
+
+    private List<ResearchZoneShare> resolveActiveResearchShares(Long farmId, String username, String shareToken) {
+        List<ResearchZoneShare> candidates = new ArrayList<>();
+        if (username != null && !username.equals("anonymousUser")) {
+            candidates.addAll(researchZoneShareRepository.findByFarmIdAndUserUsername(farmId, username));
+            candidates.addAll(researchZoneShareClaimRepository.findSharesByFarmIdAndUsername(farmId, username));
+        }
+        if (shareToken != null && !shareToken.isBlank()) {
+            researchZoneShareRepository.findByShareToken(shareToken.trim()).ifPresent(candidates::add);
+        }
+
+        Set<Long> seen = new HashSet<>();
+        return candidates.stream()
+                .filter(share -> share.getFarm() != null && share.getFarm().getId().equals(farmId))
+                .filter(this::isResearchShareActive)
+                .filter(share -> seen.add(share.getId()))
+                .collect(Collectors.toList());
+    }
+
+    private Set<Long> mergeLockedFilter(Set<Long> requestedValues, Set<Long> lockedValues) {
+        if (lockedValues == null || lockedValues.isEmpty()) return requestedValues;
+        if (requestedValues == null || requestedValues.isEmpty()) {
+            return new LinkedHashSet<>(lockedValues);
+        }
+
+        Set<Long> intersection = requestedValues.stream()
+                .filter(lockedValues::contains)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (intersection.isEmpty()) {
+            return null;
+        }
+        return intersection;
+    }
+
+    private List<Parcel> findParcelsFromResearchShares(Long farmId,
+                                                       List<ResearchZoneShare> shares,
+                                                       Set<Long> periodIds,
+                                                       Set<Long> toolIds,
+                                                       Set<Long> productIds,
+                                                       LocalDate startDate,
+                                                       LocalDate endDate,
+                                                       String polygonWkt,
+                                                       Double minLat,
+                                                       Double minLng,
+                                                       Double maxLat,
+                                                       Double maxLng) {
+        if (shares == null || shares.isEmpty()) return List.of();
+
+        Set<Long> parcelIds = new HashSet<>();
+        List<Parcel> result = new ArrayList<>();
+
+        for (ResearchZoneShare share : shares) {
+            Set<Long> sharePeriodIds = getShareFilterIds(share.getPeriodIds(), share.getPeriod() != null ? share.getPeriod().getId() : null);
+            Set<Long> shareToolIds = getShareFilterIds(share.getToolIds(), share.getTool() != null ? share.getTool().getId() : null);
+            Set<Long> shareProductIds = getShareFilterIds(share.getProductIds(), share.getProduct() != null ? share.getProduct().getId() : null);
+
+            Set<Long> effectivePeriodIds = mergeLockedFilter(periodIds, sharePeriodIds);
+            Set<Long> effectiveToolIds = mergeLockedFilter(toolIds, shareToolIds);
+            Set<Long> effectiveProductIds = mergeLockedFilter(productIds, shareProductIds);
+            if (effectivePeriodIds == null) continue;
+            if (effectiveToolIds == null) continue;
+            if (effectiveProductIds == null) continue;
+
+            LocalDate effectiveStartDate = startDate;
+            LocalDate effectiveEndDate = endDate;
+            if (share.getFilterStartDate() != null && (effectiveStartDate == null || share.getFilterStartDate().isAfter(effectiveStartDate))) {
+                effectiveStartDate = share.getFilterStartDate();
+            }
+            if (share.getFilterEndDate() != null && (effectiveEndDate == null || share.getFilterEndDate().isBefore(effectiveEndDate))) {
+                effectiveEndDate = share.getFilterEndDate();
+            }
+            if (effectiveStartDate != null && effectiveEndDate != null && effectiveStartDate.isAfter(effectiveEndDate)) {
+                continue;
+            }
+
+            LocalDateTime startDateTime = effectiveStartDate != null ? effectiveStartDate.atStartOfDay() : null;
+            LocalDateTime endDateTime = effectiveEndDate != null ? effectiveEndDate.atTime(LocalTime.MAX) : null;
+
+                boolean periodFilter = effectivePeriodIds != null && !effectivePeriodIds.isEmpty();
+                boolean toolFilter = effectiveToolIds != null && !effectiveToolIds.isEmpty();
+                boolean productFilter = effectiveProductIds != null && !effectiveProductIds.isEmpty();
+
+            List<Parcel> candidates = parcelRepository.searchParcels(
+                    farmId,
+                    periodFilter,
+                    toQueryFilterValues(effectivePeriodIds),
+                    toolFilter,
+                    toQueryFilterValues(effectiveToolIds),
+                    productFilter,
+                    toQueryFilterValues(effectiveProductIds),
+                    startDateTime,
+                    endDateTime,
+                    polygonWkt,
+                    minLng,
+                    minLat,
+                    maxLng,
+                    maxLat
+            );
+
+            boolean noOperationFilters = (effectiveToolIds == null || effectiveToolIds.isEmpty())
+                    && (effectiveProductIds == null || effectiveProductIds.isEmpty())
+                    && startDateTime == null
+                    && endDateTime == null
+                    && polygonWkt == null
+                    && minLat == null
+                    && minLng == null
+                    && maxLat == null
+                    && maxLng == null;
+
+            if (candidates.isEmpty() && noOperationFilters) {
+                candidates = parcelRepository.findByFarmId(farmId).stream()
+                        .filter(parcel -> {
+                            if (effectivePeriodIds == null || effectivePeriodIds.isEmpty()) {
+                                return true;
+                            }
+                            if (parcel.getPeriod() == null || parcel.getPeriod().getId() == null) {
+                                return false;
+                            }
+                            return effectivePeriodIds.contains(parcel.getPeriod().getId());
+                        })
+                        .collect(Collectors.toList());
+            }
+
+            Geometry shareZone;
+            try {
+                shareZone = wktReader.read(share.getZoneWkt());
+            } catch (Exception e) {
+                continue;
+            }
+
+            for (Parcel parcel : candidates) {
+                if (parcel.getGeodata() == null) continue;
+                if (!parcel.getGeodata().intersects(shareZone)) continue;
+                if (parcelIds.add(parcel.getId())) {
+                    result.add(parcel);
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<Parcel> findParcelsFromResearchSharesFallback(Long farmId, List<ResearchZoneShare> shares) {
+        if (shares == null || shares.isEmpty()) return List.of();
+
+        List<Parcel> allParcels = parcelRepository.findByFarmId(farmId);
+        Set<Long> parcelIds = new HashSet<>();
+        List<Parcel> result = new ArrayList<>();
+
+        for (ResearchZoneShare share : shares) {
+            Set<Long> sharePeriodIds = getShareFilterIds(share.getPeriodIds(), share.getPeriod() != null ? share.getPeriod().getId() : null);
+
+            Geometry shareZone;
+            try {
+                shareZone = wktReader.read(share.getZoneWkt());
+            } catch (Exception e) {
+                continue;
+            }
+
+            for (Parcel parcel : allParcels) {
+                if (parcel.getGeodata() == null) continue;
+                if (!sharePeriodIds.isEmpty()) {
+                    if (parcel.getPeriod() == null || !sharePeriodIds.contains(parcel.getPeriod().getId())) {
+                        continue;
+                    }
+                }
+                if (!parcel.getGeodata().intersects(shareZone)) continue;
+                if (parcelIds.add(parcel.getId())) {
+                    result.add(parcel);
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<Long> toQueryFilterValues(Set<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of(-1L);
+        }
+        return new ArrayList<>(ids);
+    }
+
+    private Set<Long> resolveRequestedIds(Long singleValue, List<Long> listValues) {
+        LinkedHashSet<Long> values = new LinkedHashSet<>();
+        if (singleValue != null) {
+            values.add(singleValue);
+        }
+        if (listValues != null) {
+            for (Long value : listValues) {
+                if (value != null) {
+                    values.add(value);
+                }
+            }
+        }
+        return values;
+    }
+
+    private Set<Long> getShareFilterIds(String csvValues, Long legacyValue) {
+        LinkedHashSet<Long> values = new LinkedHashSet<>();
+        if (csvValues != null && !csvValues.isBlank()) {
+            for (String raw : csvValues.split(",")) {
+                String token = raw.trim();
+                if (token.isEmpty()) continue;
+                try {
+                    values.add(Long.parseLong(token));
+                } catch (NumberFormatException ignored) {
+                    // Ignore malformed values to preserve backward compatibility.
+                }
+            }
+        }
+        if (values.isEmpty() && legacyValue != null) {
+            values.add(legacyValue);
+        }
+        return values;
+    }
+
+    private String toCsv(Set<Long> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        return values.stream()
+                .sorted()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+    }
+
+    private List<Long> toSortedList(Set<Long> values) {
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return values.stream().sorted().collect(Collectors.toList());
+    }
+
+    private void enforceShareClaimLimit(ResearchZoneShare share, User currentUser) {
+        if (share.getUser() != null) {
+            return;
+        }
+        if (share.getMaxUsers() == null) {
+            return;
+        }
+
+        if (researchZoneShareClaimRepository.existsByShareIdAndUserId(share.getId(), currentUser.getId())) {
+            return;
+        }
+
+        long claimedUsers = researchZoneShareClaimRepository.countDistinctUsersByShareId(share.getId());
+        if (claimedUsers >= share.getMaxUsers()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Maximum number of users reached for this share");
+        }
+
+        ResearchZoneShareClaim claim = new ResearchZoneShareClaim();
+        claim.setShare(share);
+        claim.setUser(currentUser);
+        claim.setCreatedAt(LocalDateTime.now());
+        researchZoneShareClaimRepository.save(claim);
     }
 
     public List<yt.wer.efms.dto.ParcelShareDto> listParcelShares(Long farmId, Long parcelId) {
