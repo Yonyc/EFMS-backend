@@ -45,6 +45,7 @@ public class ParcelOperationService {
     private final FarmRepository farmRepository;
     private final PermissionService permissionService;
     private final ParcelShareRepository parcelShareRepository;
+    private final FarmService farmService;
 
     public ParcelOperationService(ParcelOperationRepository parcelOperationRepository,
                                   ParcelRepository parcelRepository,
@@ -55,7 +56,8 @@ public class ParcelOperationService {
                                   UnitRepository unitRepository,
                                   FarmRepository farmRepository,
                                   PermissionService permissionService,
-                                  ParcelShareRepository parcelShareRepository) {
+                                  ParcelShareRepository parcelShareRepository,
+                                  FarmService farmService) {
         this.parcelOperationRepository = parcelOperationRepository;
         this.parcelRepository = parcelRepository;
         this.operationTypeRepository = operationTypeRepository;
@@ -66,6 +68,7 @@ public class ParcelOperationService {
         this.farmRepository = farmRepository;
         this.permissionService = permissionService;
         this.parcelShareRepository = parcelShareRepository;
+        this.farmService = farmService;
     }
 
     public List<OperationTypeDto> listOperationTypes() {
@@ -74,22 +77,57 @@ public class ParcelOperationService {
                 .collect(Collectors.toList());
     }
 
-    public List<ParcelOperationDto> listOperationsForParcel(Long farmId, Long parcelId) {
-        requireFarmView(farmId);
+    public List<ParcelOperationDto> listOperationsForParcel(Long farmId, Long parcelId, String shareToken) {
         Parcel parcel = parcelRepository.findById(parcelId)
                 .orElseThrow(() -> new RuntimeException("Parcel not found"));
         if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
             throw new RuntimeException("Parcel does not belong to this farm");
         }
+
         String username = permissionService.currentUsername();
-        if (!permissionService.canViewParcel(parcel, username)) {
-            throw new RuntimeException("Not allowed to view this parcel");
+        boolean hasAccess = permissionService.canViewParcel(parcel, username);
+
+        List<yt.wer.efms.dto.ResearchZoneShareDto> activeShares = new java.util.ArrayList<>();
+        if (!hasAccess) {
+            activeShares = farmService.getResearchSharesForParcel(farmId, parcelId, shareToken);
+            if (activeShares.isEmpty()) {
+                throw new RuntimeException("Not allowed to view this parcel");
+            }
         }
 
-        return parcelOperationRepository.findDistinctByParcelsIdOrderByDateDesc(parcelId)
+        List<ParcelOperationDto> ops = parcelOperationRepository.findDistinctByParcelsIdOrderByDateDesc(parcelId)
                 .stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
+
+        if (!hasAccess && !activeShares.isEmpty()) {
+            final List<yt.wer.efms.dto.ResearchZoneShareDto> finalShares = activeShares;
+            ops = ops.stream()
+                    .filter(op -> finalShares.stream().anyMatch(share -> matchesShare(op, share)))
+                    .collect(Collectors.toList());
+        }
+
+        return ops;
+    }
+
+    private boolean matchesShare(ParcelOperationDto dto, yt.wer.efms.dto.ResearchZoneShareDto share) {
+        if (share.getFilterStartDate() != null && dto.getDate().toLocalDate().isBefore(share.getFilterStartDate())) {
+            return false;
+        }
+        if (share.getFilterEndDate() != null && dto.getDate().toLocalDate().isAfter(share.getFilterEndDate())) {
+            return false;
+        }
+        if (share.getToolIds() != null && !share.getToolIds().isEmpty()) {
+            boolean hasTool = dto.getProducts().stream()
+                    .anyMatch(p -> p.getToolId() != null && share.getToolIds().contains(p.getToolId()));
+            if (!hasTool) return false;
+        }
+        if (share.getProductIds() != null && !share.getProductIds().isEmpty()) {
+            boolean hasProduct = dto.getProducts().stream()
+                    .anyMatch(p -> p.getProductId() != null && share.getProductIds().contains(p.getProductId()));
+            if (!hasProduct) return false;
+        }
+        return true;
     }
 
     public Optional<ParcelOperationDto> createOperation(Long farmId, Long parcelId, CreateParcelOperationRequest request) {

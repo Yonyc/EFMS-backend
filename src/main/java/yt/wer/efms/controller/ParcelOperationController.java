@@ -24,9 +24,9 @@ public class ParcelOperationController {
     }
 
     @GetMapping("/farm/{farmId}/parcels/{parcelId}/operations")
-    public ResponseEntity<List<ParcelOperationDto>> listOperations(@PathVariable Long farmId, @PathVariable Long parcelId) {
+    public ResponseEntity<List<ParcelOperationDto>> listOperations(@PathVariable Long farmId, @PathVariable Long parcelId, @RequestParam(required = false) String shareToken) {
         try {
-            return ResponseEntity.ok(parcelOperationService.listOperationsForParcel(farmId, parcelId));
+            return ResponseEntity.ok(parcelOperationService.listOperationsForParcel(farmId, parcelId, shareToken));
         } catch (RuntimeException ex) {
             if (ex.getMessage() != null && ex.getMessage().toLowerCase().contains("found")) {
                 return ResponseEntity.notFound().build();

@@ -240,10 +240,8 @@ public class FarmService {
                     .map(ParcelShare::getParcel)
                     .collect(Collectors.toSet()));
             List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
-            parcelSet.addAll(findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null));
-            if (parcelSet.isEmpty() && !activeShares.isEmpty()) {
-                parcelSet.addAll(findParcelsFromResearchSharesFallback(farmId, activeShares));
-            }
+            List<Parcel> researchParcels = findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null);
+            parcelSet.addAll(researchParcels);
         }
         return parcelSet.stream().map(this::toParcelDto).collect(Collectors.toList());
     }
@@ -258,10 +256,8 @@ public class FarmService {
                     .map(ParcelShare::getParcel)
                     .collect(Collectors.toSet()));
             List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
-            parcelSet.addAll(findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null));
-            if (parcelSet.isEmpty() && !activeShares.isEmpty()) {
-                parcelSet.addAll(findParcelsFromResearchSharesFallback(farmId, activeShares));
-            }
+            List<Parcel> researchParcels = findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null);
+            parcelSet.addAll(researchParcels);
         }
         return parcelSet.stream().map(this::toParcelListDto).collect(Collectors.toList());
     }
@@ -1104,16 +1100,18 @@ public class FarmService {
     }
 
     private Set<Long> mergeLockedFilter(Set<Long> requestedValues, Set<Long> lockedValues) {
-        if (lockedValues == null || lockedValues.isEmpty()) return requestedValues;
-        if (requestedValues == null || requestedValues.isEmpty()) {
-            return new LinkedHashSet<>(lockedValues);
-        }
+        boolean hasRequested = requestedValues != null && !requestedValues.isEmpty();
+        boolean hasLocked = lockedValues != null && !lockedValues.isEmpty();
+
+        if (!hasLocked && !hasRequested) return new HashSet<>();
+        if (!hasLocked) return new LinkedHashSet<>(requestedValues);
+        if (!hasRequested) return new LinkedHashSet<>(lockedValues);
 
         Set<Long> intersection = requestedValues.stream()
                 .filter(lockedValues::contains)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         if (intersection.isEmpty()) {
-            return null;
+            return null; // Means no valid access
         }
         return intersection;
     }
@@ -1143,12 +1141,14 @@ public class FarmService {
             Set<Long> effectivePeriodIds = mergeLockedFilter(periodIds, sharePeriodIds);
             Set<Long> effectiveToolIds = mergeLockedFilter(toolIds, shareToolIds);
             Set<Long> effectiveProductIds = mergeLockedFilter(productIds, shareProductIds);
+
             if (effectivePeriodIds == null) continue;
             if (effectiveToolIds == null) continue;
             if (effectiveProductIds == null) continue;
 
             LocalDate effectiveStartDate = startDate;
             LocalDate effectiveEndDate = endDate;
+            
             if (share.getFilterStartDate() != null && (effectiveStartDate == null || share.getFilterStartDate().isAfter(effectiveStartDate))) {
                 effectiveStartDate = share.getFilterStartDate();
             }
@@ -1162,9 +1162,9 @@ public class FarmService {
             LocalDateTime startDateTime = effectiveStartDate != null ? effectiveStartDate.atStartOfDay() : null;
             LocalDateTime endDateTime = effectiveEndDate != null ? effectiveEndDate.atTime(LocalTime.MAX) : null;
 
-                boolean periodFilter = effectivePeriodIds != null && !effectivePeriodIds.isEmpty();
-                boolean toolFilter = effectiveToolIds != null && !effectiveToolIds.isEmpty();
-                boolean productFilter = effectiveProductIds != null && !effectiveProductIds.isEmpty();
+            boolean periodFilter = effectivePeriodIds != null && !effectivePeriodIds.isEmpty();
+            boolean toolFilter = effectiveToolIds != null && !effectiveToolIds.isEmpty();
+            boolean productFilter = effectiveProductIds != null && !effectiveProductIds.isEmpty();
 
             List<Parcel> candidates = parcelRepository.searchParcels(
                     farmId,
@@ -1183,30 +1183,6 @@ public class FarmService {
                     maxLat
             );
 
-            boolean noOperationFilters = (effectiveToolIds == null || effectiveToolIds.isEmpty())
-                    && (effectiveProductIds == null || effectiveProductIds.isEmpty())
-                    && startDateTime == null
-                    && endDateTime == null
-                    && polygonWkt == null
-                    && minLat == null
-                    && minLng == null
-                    && maxLat == null
-                    && maxLng == null;
-
-            if (candidates.isEmpty() && noOperationFilters) {
-                candidates = parcelRepository.findByFarmId(farmId).stream()
-                        .filter(parcel -> {
-                            if (effectivePeriodIds == null || effectivePeriodIds.isEmpty()) {
-                                return true;
-                            }
-                            if (parcel.getPeriod() == null || parcel.getPeriod().getId() == null) {
-                                return false;
-                            }
-                            return effectivePeriodIds.contains(parcel.getPeriod().getId());
-                        })
-                        .collect(Collectors.toList());
-            }
-
             Geometry shareZone;
             try {
                 shareZone = wktReader.read(share.getZoneWkt());
@@ -1216,39 +1192,6 @@ public class FarmService {
 
             for (Parcel parcel : candidates) {
                 if (parcel.getGeodata() == null) continue;
-                if (!parcel.getGeodata().intersects(shareZone)) continue;
-                if (parcelIds.add(parcel.getId())) {
-                    result.add(parcel);
-                }
-            }
-        }
-        return result;
-    }
-
-    private List<Parcel> findParcelsFromResearchSharesFallback(Long farmId, List<ResearchZoneShare> shares) {
-        if (shares == null || shares.isEmpty()) return List.of();
-
-        List<Parcel> allParcels = parcelRepository.findByFarmId(farmId);
-        Set<Long> parcelIds = new HashSet<>();
-        List<Parcel> result = new ArrayList<>();
-
-        for (ResearchZoneShare share : shares) {
-            Set<Long> sharePeriodIds = getShareFilterIds(share.getPeriodIds(), share.getPeriod() != null ? share.getPeriod().getId() : null);
-
-            Geometry shareZone;
-            try {
-                shareZone = wktReader.read(share.getZoneWkt());
-            } catch (Exception e) {
-                continue;
-            }
-
-            for (Parcel parcel : allParcels) {
-                if (parcel.getGeodata() == null) continue;
-                if (!sharePeriodIds.isEmpty()) {
-                    if (parcel.getPeriod() == null || !sharePeriodIds.contains(parcel.getPeriod().getId())) {
-                        continue;
-                    }
-                }
                 if (!parcel.getGeodata().intersects(shareZone)) continue;
                 if (parcelIds.add(parcel.getId())) {
                     result.add(parcel);
@@ -1410,5 +1353,31 @@ public class FarmService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only share parcels you manage");
         }
         parcelShareRepository.deleteByParcelIdAndUserId(parcelId, userId);
+    }
+
+    public List<yt.wer.efms.dto.ResearchZoneShareDto> getResearchSharesForParcel(Long farmId, Long parcelId, String shareToken) {
+        String username = permissionService.currentUsername();
+        List<ResearchZoneShare> allShares = resolveActiveResearchShares(farmId, username, shareToken);
+        if (allShares.isEmpty()) return List.of();
+
+        Parcel parcel = parcelRepository.findById(parcelId).orElse(null);
+        if (parcel == null || parcel.getGeodata() == null) return List.of();
+
+        List<yt.wer.efms.dto.ResearchZoneShareDto> result = new ArrayList<>();
+        for (ResearchZoneShare share : allShares) {
+            Set<Long> sharePeriodIds = getShareFilterIds(share.getPeriodIds(), share.getPeriod() != null ? share.getPeriod().getId() : null);
+            if (!sharePeriodIds.isEmpty() && (parcel.getPeriod() == null || !sharePeriodIds.contains(parcel.getPeriod().getId()))) {
+                continue;
+            }
+            try {
+                Geometry shareZone = wktReader.read(share.getZoneWkt());
+                if (parcel.getGeodata().intersects(shareZone)) {
+                    result.add(toResearchZoneShareDto(share));
+                }
+            } catch (Exception e) {
+                // Ignore invalid geometry
+            }
+        }
+        return result;
     }
 }
