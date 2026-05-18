@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "users")
@@ -19,15 +20,18 @@ public class User {
     private LocalDateTime modifiedAt;
 
     @OneToMany(mappedBy = "user")
+    @JsonIgnore
     private Set<FarmUser> farmUsers = new HashSet<>();
 
     // authentication fields
     @Column(unique = true)
     private String username;
 
+    @JsonIgnore
     private String password;
 
     @OneToMany(mappedBy = "owner")
+    @JsonIgnore
     private Set<Farm> ownedFarms = new HashSet<>();
 
     @Column(name = "email")
@@ -42,6 +46,15 @@ public class User {
 
     @Column(name = "avatar_url")
     private String avatarUrl;
+
+    @Column(name = "is_admin", nullable = false, columnDefinition = "boolean default false")
+    private boolean isAdmin = false;
+
+    @Column(name = "verified", nullable = false, columnDefinition = "boolean default false")
+    private boolean verified = false;
+
+    @Column(name = "verification_token")
+    private String verificationToken;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -75,6 +88,15 @@ public class User {
 
     public String getAvatarUrl() { return avatarUrl; }
     public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
+
+    public boolean isAdmin() { return isAdmin; }
+    public void setAdmin(boolean admin) { isAdmin = admin; }
+
+    public boolean isVerified() { return verified; }
+    public void setVerified(boolean verified) { this.verified = verified; }
+
+    public String getVerificationToken() { return verificationToken; }
+    public void setVerificationToken(String verificationToken) { this.verificationToken = verificationToken; }
 
     @PrePersist
     public void prePersist() {

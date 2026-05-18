@@ -1,6 +1,7 @@
 package yt.wer.efms.service;
 
 import org.springframework.security.core.context.SecurityContextHolder;
+import yt.wer.efms.security.CustomUserDetails;
 import org.springframework.stereotype.Service;
 import yt.wer.efms.model.Farm;
 import yt.wer.efms.model.Parcel;
@@ -39,58 +40,88 @@ public class PermissionService {
         }
     }
 
+    public Long currentUserId() {
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            if (principal instanceof CustomUserDetails) {
+                return ((CustomUserDetails) principal).getUserId();
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public boolean isCurrentUserAdmin() {
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            if (principal instanceof CustomUserDetails) {
+                return ((CustomUserDetails) principal).isAdmin();
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public Farm requireFarm(Long farmId) {
         return farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));
     }
 
-    public boolean isOwner(Farm farm, String username) {
-        return farm.getOwner() != null && username != null && username.equals(farm.getOwner().getUsername());
+    public boolean isOwner(Farm farm, Long userId) {
+        return farm.getOwner() != null && userId != null && userId.equals(farm.getOwner().getId());
     }
 
-    public Optional<Role> getFarmRole(Long farmId, String username) {
-        if (username == null) return Optional.empty();
-        return farmUserRepository.findByFarmIdAndUserUsername(farmId, username).map(fu -> fu.getRole());
+    public Optional<Role> getFarmRole(Long farmId, Long userId) {
+        if (userId == null) return Optional.empty();
+        return farmUserRepository.findByFarmIdAndUserId(farmId, userId).map(fu -> fu.getRole());
     }
 
-    public boolean canViewFarm(Long farmId, String username) {
+    public boolean canViewFarm(Long farmId, Long userId, boolean isAdmin) {
+        if (isAdmin) return true;
         Farm farm = requireFarm(farmId);
-        if (isOwner(farm, username)) return true;
-        return getFarmRole(farmId, username).isPresent();
+        if (isOwner(farm, userId)) return true;
+        return getFarmRole(farmId, userId).isPresent();
     }
 
-    public boolean canManageFarm(Long farmId, String username) {
+    public boolean canManageFarm(Long farmId, Long userId, boolean isAdmin) {
+        if (isAdmin) return true;
         Farm farm = requireFarm(farmId);
-        if (isOwner(farm, username)) return true;
-        return getFarmRole(farmId, username)
+        if (isOwner(farm, userId)) return true;
+        return getFarmRole(farmId, userId)
                 .map(role -> role == Role.ADMIN)
                 .orElse(false);
     }
 
-    public boolean canEditFarm(Long farmId, String username) {
+    public boolean canEditFarm(Long farmId, Long userId, boolean isAdmin) {
+        if (isAdmin) return true;
         Farm farm = requireFarm(farmId);
-        if (isOwner(farm, username)) return true;
-        return getFarmRole(farmId, username)
+        if (isOwner(farm, userId)) return true;
+        return getFarmRole(farmId, userId)
                 .map(role -> role == Role.ADMIN || role == Role.EDITOR)
                 .orElse(false);
     }
 
-    public boolean canViewParcel(Parcel parcel, String username) {
-        if (parcel.getFarm() != null && canViewFarm(parcel.getFarm().getId(), username)) return true;
-        if (username == null) return false;
-        return parcelShareRepository.findByParcelIdAndUserUsername(parcel.getId(), username).isPresent();
+    public boolean canViewParcel(Parcel parcel, Long userId, boolean isAdmin) {
+        if (isAdmin) return true;
+        if (parcel.getFarm() != null && canViewFarm(parcel.getFarm().getId(), userId, isAdmin)) return true;
+        if (userId == null) return false;
+        return parcelShareRepository.findFirstByParcelIdAndUserId(parcel.getId(), userId).isPresent();
     }
 
-    public boolean canEditParcel(Parcel parcel, String username) {
-        if (parcel.getFarm() != null && canEditFarm(parcel.getFarm().getId(), username)) return true;
-        if (username == null) return false;
-        return parcelShareRepository.findByParcelIdAndUserUsername(parcel.getId(), username)
+    public boolean canEditParcel(Parcel parcel, Long userId, boolean isAdmin) {
+        if (isAdmin) return true;
+        if (parcel.getFarm() != null && canEditFarm(parcel.getFarm().getId(), userId, isAdmin)) return true;
+        if (userId == null) return false;
+        return parcelShareRepository.findFirstByParcelIdAndUserId(parcel.getId(), userId)
                 .map(share -> share.getRole() == ParcelShareRole.EDITOR)
                 .orElse(false);
     }
 
-    public boolean canShareParcel(Parcel parcel, String username) {
+    public boolean canShareParcel(Parcel parcel, Long userId, boolean isAdmin) {
+        if (isAdmin) return true;
         if (parcel.getFarm() == null) return false;
-        return canManageFarm(parcel.getFarm().getId(), username);
+        return canManageFarm(parcel.getFarm().getId(), userId, isAdmin);
     }
 
     public Parcel requireParcel(Long parcelId) {

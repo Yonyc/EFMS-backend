@@ -3,6 +3,8 @@ package yt.wer.efms.service;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.io.WKTReader;
 import org.locationtech.jts.io.WKTWriter;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import yt.wer.efms.dto.CreateParcelRequest;
@@ -12,6 +14,7 @@ import yt.wer.efms.dto.ParcelListDto;
 import yt.wer.efms.model.Farm;
 import yt.wer.efms.model.ImportedParcel;
 import yt.wer.efms.model.Parcel;
+import yt.wer.efms.model.ParcelOperation;
 import yt.wer.efms.model.Period;
 import yt.wer.efms.model.ParcelShare;
 import yt.wer.efms.model.FarmUser;
@@ -36,6 +39,7 @@ import yt.wer.efms.repository.UserRepository;
 import yt.wer.efms.repository.FarmUserRepository;
 import yt.wer.efms.repository.ToolRepository;
 import yt.wer.efms.repository.ProductRepository;
+import yt.wer.efms.repository.ParcelOperationRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
@@ -54,6 +58,7 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 public class FarmService {
+    private final yt.wer.efms.repository.SystemSettingsRepository systemSettingsRepository;
     private final FarmRepository farmRepository;
     private final ParcelRepository parcelRepository;
     private final UserRepository userRepository;
@@ -66,10 +71,12 @@ public class FarmService {
     private final FarmUserRepository farmUserRepository;
     private final ToolRepository toolRepository;
     private final ProductRepository productRepository;
+    private final ParcelOperationRepository parcelOperationRepository;
+    private final EmailService emailService;
     private final WKTReader wktReader = new WKTReader();
     private final WKTWriter wktWriter = new WKTWriter();
 
-    public FarmService(FarmRepository farmRepository, ParcelRepository parcelRepository, 
+    public FarmService(FarmRepository farmRepository, yt.wer.efms.repository.SystemSettingsRepository systemSettingsRepository, ParcelRepository parcelRepository, 
                        UserRepository userRepository, ImportedParcelRepository importedParcelRepository,
                        PeriodRepository periodRepository,
                        ParcelShareRepository parcelShareRepository,
@@ -78,8 +85,11 @@ public class FarmService {
                        PermissionService permissionService,
                        FarmUserRepository farmUserRepository,
                        ToolRepository toolRepository,
-                       ProductRepository productRepository) {
+                       ProductRepository productRepository,
+                       ParcelOperationRepository parcelOperationRepository,
+                       EmailService emailService) {
         this.farmRepository = farmRepository;
+        this.systemSettingsRepository = systemSettingsRepository;
         this.parcelRepository = parcelRepository;
         this.userRepository = userRepository;
         this.importedParcelRepository = importedParcelRepository;
@@ -91,49 +101,86 @@ public class FarmService {
         this.farmUserRepository = farmUserRepository;
         this.toolRepository = toolRepository;
         this.productRepository = productRepository;
+        this.parcelOperationRepository = parcelOperationRepository;
+        this.emailService = emailService;
+    }
+
+    private void sendFarmAlert(Farm farm, String actionType, String details) {
+        String recipient = farm.getAlertRecipientEmail();
+        if (recipient == null || recipient.trim().isEmpty()) {
+            if (farm.getOwner() != null && farm.getOwner().getEmail() != null) {
+                recipient = farm.getOwner().getEmail().trim();
+            }
+        }
+        if (recipient == null || recipient.isEmpty()) {
+            return; // No email configured
+        }
+
+        String subject = "EFMS Farm Security Alert: " + actionType + " on " + farm.getName();
+        String htmlBody = "<div style=\"font-family: 'Outfit', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);\">"
+                + "  <div style=\"background: linear-gradient(135deg, #4f46e5, #6366f1); padding: 24px; border-radius: 12px; color: #ffffff; text-align: center;\">"
+                + "    <h2 style=\"margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;\">EFMS SECURITY ALERT</h2>"
+                + "    <p style=\"margin: 6px 0 0 0; font-size: 14px; opacity: 0.9; font-weight: 500;\">Farm: <strong>" + farm.getName() + "</strong></p>"
+                + "  </div>"
+                + "  <div style=\"padding: 24px; color: #334155;\">"
+                + "    <p style=\"font-size: 16px; line-height: 1.6; font-weight: 600;\">Hello,</p>"
+                + "    <p style=\"font-size: 15px; line-height: 1.6; color: #475569;\">A sensitive action (<strong>" + actionType + "</strong>) has been performed on your farm:</p>"
+                + "    <div style=\"background-color: #f8fafc; border-left: 4px solid #6366f1; padding: 18px; margin: 24px 0; border-radius: 0 12px 12px 0; border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;\">"
+                + "      <p style=\"margin: 0 0 8px 0; font-size: 12px; color: #64748b; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;\">Alert Details</p>"
+                + "      <p style=\"margin: 0; font-size: 15px; line-height: 1.6; color: #1e293b; font-weight: 500;\">" + details + "</p>"
+                + "    </div>"
+                + "    <p style=\"font-size: 13px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px; line-height: 1.5;\">"
+                + "      This is an automated message sent by the Exploitation Farm Management System (EFMS). You received this because email alerts are enabled for this farm."
+                + "    </p>"
+                + "  </div>"
+                + "</div>";
+
+        emailService.sendEmail(recipient, subject, htmlBody);
     }
 
     public List<FarmDto> listAll() {
+        // Admin use: filter out deleted farms for normal listing
         return farmRepository.findAll().stream()
+                .filter(f -> f.getDeletedAt() == null)
                 .map(this::toFarmDto)
                 .collect(Collectors.toList());
     }
 
     public List<FarmDto> listUserFarms(String username) {
-        List<Farm> owned = farmRepository.findByOwnerUsername(username);
+        final Long actionUserId = userRepository.findByUsername(username).map(yt.wer.efms.model.User::getId).orElse(null);
+        final boolean isAdmin = userRepository.findByUsername(username).map(yt.wer.efms.model.User::isAdmin).orElse(false);
+        List<Farm> owned = farmRepository.findByOwnerUsernameAndDeletedAtIsNull(username);
         List<Farm> memberFarms = farmRepository.findAll().stream()
-            .filter(farm -> permissionService.getFarmRole(farm.getId(), username).isPresent())
+            .filter(farm -> farm.getDeletedAt() == null)
+            .filter(farm -> permissionService.getFarmRole(farm.getId(), actionUserId).isPresent())
             .collect(Collectors.toList());
         List<Farm> sharedFarms = parcelShareRepository.findByUserUsername(username).stream()
             .map(ParcelShare::getParcel)
             .map(Parcel::getFarm)
-            .filter(farm -> farm != null)
+            .filter(farm -> farm != null && farm.getDeletedAt() == null)
             .distinct()
             .collect(Collectors.toList());
         List<Farm> researchSharedFarms = researchZoneShareRepository.findByUserUsername(username).stream()
             .filter(this::isResearchShareActive)
             .map(ResearchZoneShare::getFarm)
-            .filter(farm -> farm != null)
+            .filter(farm -> farm != null && farm.getDeletedAt() == null)
             .distinct()
             .collect(Collectors.toList());
         List<Farm> researchClaimedFarms = researchZoneShareClaimRepository.findClaimedFarmsByUsername(username).stream()
-            .filter(farm -> farm != null)
+            .filter(farm -> farm != null && farm.getDeletedAt() == null)
             .distinct()
             .collect(Collectors.toList());
         return java.util.stream.Stream.of(owned, memberFarms, sharedFarms, researchSharedFarms, researchClaimedFarms)
             .flatMap(List::stream)
             .distinct()
-            .map(farm -> {
-                FarmDto dto = toFarmDto(farm);
-                dto.setCanEdit(permissionService.canEditFarm(farm.getId(), username));
-                dto.setCanManage(permissionService.canManageFarm(farm.getId(), username));
-                return dto;
-            })
+            .map(this::toFarmDto)
             .collect(Collectors.toList());
     }
 
     public Optional<FarmDto> findById(Long id) {
-        return farmRepository.findById(id).map(this::toFarmDto);
+        return farmRepository.findById(id)
+                .filter(f -> f.getDeletedAt() == null)
+                .map(this::toFarmDto);
     }
 
     public FarmDto create(String name, String description, String location, Boolean isPublic, Boolean showName, Boolean showDescription, Boolean showLocation) {
@@ -171,15 +218,23 @@ public class FarmService {
     }
 
     public List<FarmDto> listPublic() {
-        return farmRepository.findByIsPublicTrue().stream()
+        return farmRepository.findByIsPublicTrueAndDeletedAtIsNull().stream()
                 .map(this::toFarmDto)
                 .map(this::maskByVisibility)
                 .collect(Collectors.toList());
     }
 
+    public Page<FarmDto> listPublic(Pageable pageable) {
+        return farmRepository.findByIsPublicTrueAndDeletedAtIsNull(pageable)
+                .map(this::toFarmDto)
+                .map(this::maskByVisibility);
+    }
+
     public Optional<FarmDto> update(Long id, FarmDto input) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(id, username)) {
+        if (!permissionService.canManageFarm(id, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update farms you manage");
         }
         return farmRepository.findById(id).map(f -> {
@@ -190,6 +245,10 @@ public class FarmService {
             if (input.getShowName() != null) f.setShowName(input.getShowName());
             if (input.getShowDescription() != null) f.setShowDescription(input.getShowDescription());
             if (input.getShowLocation() != null) f.setShowLocation(input.getShowLocation());
+            if (input.getEnableMemberAlerts() != null) f.setEnableMemberAlerts(input.getEnableMemberAlerts());
+            if (input.getEnableParcelAlerts() != null) f.setEnableParcelAlerts(input.getEnableParcelAlerts());
+            if (input.getEnableOperationAlerts() != null) f.setEnableOperationAlerts(input.getEnableOperationAlerts());
+            f.setAlertRecipientEmail(input.getAlertRecipientEmail());
             f.setModifiedAt(LocalDateTime.now());
             Farm s = farmRepository.save(f);
             return toFarmDto(s);
@@ -197,27 +256,98 @@ public class FarmService {
     }
 
     public void delete(Long id) {
-        String username = permissionService.currentUsername();
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         Farm farm = farmRepository.findById(id).orElse(null);
-        if (farm == null) return;
-        if (permissionService.isOwner(farm, username)) {
-            farmRepository.deleteById(id);
-            return;
+        if (farm == null || farm.getDeletedAt() != null) return;
+        if (!permissionService.isOwner(farm, actionUserId) && !isAdmin) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only delete farms you own");
         }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only delete farms you own");
+
+        // Use the same timestamp for all cascade deletes so they can be identified later
+        LocalDateTime deletedAt = LocalDateTime.now();
+        User deletedByUser = userRepository.findById(actionUserId).orElse(null);
+
+        // Cascade soft-delete: only parcels that are not already deleted
+        List<Parcel> liveParcels = parcelRepository.findByFarmId(id).stream()
+                .filter(p -> p.getDeletedAt() == null)
+                .collect(Collectors.toList());
+        for (Parcel parcel : liveParcels) {
+            parcel.setDeletedAt(deletedAt);
+            parcel.setDeletedBy(deletedByUser);
+            parcelRepository.save(parcel);
+
+            // Cascade soft-delete operations linked to this parcel (only live ones)
+            Set<Long> savedOperationIds = new HashSet<>();
+            for (ParcelOperation op : parcel.getParcelOperations()) {
+                if (op.getDeletedAt() == null && savedOperationIds.add(op.getId())) {
+                    op.setDeletedAt(deletedAt);
+                    op.setDeletedBy(deletedByUser);
+                    parcelOperationRepository.save(op);
+                }
+            }
+        }
+
+        // Soft-delete the farm itself
+        farm.setDeletedAt(deletedAt);
+        farm.setDeletedBy(deletedByUser);
+        farmRepository.save(farm);
+    }
+
+    /**
+     * Restore a soft-deleted farm and only those parcels/operations that were
+     * cascade-deleted at the exact same timestamp (i.e. not independently deleted before).
+     */
+    public void restore(Long id) {
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
+        if (!isAdmin) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admins can restore farms");
+        }
+        Farm farm = farmRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        if (farm.getDeletedAt() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Farm is not deleted");
+        }
+
+        LocalDateTime cascadeTimestamp = farm.getDeletedAt();
+
+        // Restore parcels cascade-deleted at the same moment
+        List<Parcel> cascadeParcels = parcelRepository.findByFarmIdAndDeletedAt(id, cascadeTimestamp);
+        for (Parcel parcel : cascadeParcels) {
+            parcel.setDeletedAt(null);
+            parcel.setDeletedBy(null);
+            parcelRepository.save(parcel);
+        }
+
+        // Restore operations cascade-deleted at the same moment
+        List<ParcelOperation> cascadeOps = parcelOperationRepository.findByFarmIdAndDeletedAt(id, cascadeTimestamp);
+        for (ParcelOperation op : cascadeOps) {
+            op.setDeletedAt(null);
+            op.setDeletedBy(null);
+            parcelOperationRepository.save(op);
+        }
+
+        // Restore the farm
+        farm.setDeletedAt(null);
+        farm.setDeletedBy(null);
+        farmRepository.save(farm);
     }
 
     public boolean deleteParcel(Long parcelId) {
         Optional<Parcel> parcelOpt = parcelRepository.findById(parcelId);
-        if (parcelOpt.isEmpty()) {
+        if (parcelOpt.isEmpty() || parcelOpt.get().getDeletedAt() != null) {
             return false;
         }
 
         Parcel parcel = parcelOpt.get();
-        String username = permissionService.currentUsername();
-        if (!permissionService.canEditFarm(parcel.getFarm().getId(), username)) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
+        if (!permissionService.canEditFarm(parcel.getFarm().getId(), actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only delete parcels from farms you can edit");
         }
+
+        LocalDateTime deletedAt = LocalDateTime.now();
+        User deletedByUser = userRepository.findById(actionUserId).orElse(null);
 
         ImportedParcel importedParcel = parcel.getCorrespondingPac();
         if (importedParcel != null) {
@@ -226,15 +356,24 @@ public class FarmService {
             importedParcelRepository.save(importedParcel);
         }
 
-        parcelRepository.delete(parcel);
+        parcel.setDeletedAt(deletedAt);
+        parcel.setDeletedBy(deletedByUser);
+        parcelRepository.save(parcel);
+
+        if (parcel.getFarm().isEnableParcelAlerts()) {
+            String actor = permissionService.currentUsername();
+            sendFarmAlert(parcel.getFarm(), "Parcel Deleted", "Parcel <strong>" + parcel.getName() + "</strong> (ID: " + parcel.getId() + ") has been <strong>deleted</strong> by user <strong>" + actor + "</strong>.");
+        }
         return true;
     }
 
     public List<ParcelDto> listParcels(Long farmId, String shareToken) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
         Set<Parcel> parcelSet = new HashSet<>();
-        if (permissionService.canViewFarm(farmId, username)) {
-            parcelSet.addAll(parcelRepository.findByFarmId(farmId));
+        if (permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
+            parcelSet.addAll(parcelRepository.findByFarmIdAndDeletedAtIsNull(farmId));
         } else {
             parcelSet.addAll(parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
                     .map(ParcelShare::getParcel)
@@ -247,10 +386,12 @@ public class FarmService {
     }
 
     public List<ParcelListDto> listParcelSummaries(Long farmId, String shareToken) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
         Set<Parcel> parcelSet = new HashSet<>();
-        if (permissionService.canViewFarm(farmId, username)) {
-            parcelSet.addAll(parcelRepository.findByFarmId(farmId));
+        if (permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
+            parcelSet.addAll(parcelRepository.findByFarmIdAndDeletedAtIsNull(farmId));
         } else {
             parcelSet.addAll(parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
                     .map(ParcelShare::getParcel)
@@ -263,9 +404,11 @@ public class FarmService {
     }
 
     public List<ParcelDto> listParcelsWithinBounds(Long farmId, Double minLat, Double minLng, Double maxLat, Double maxLng, String shareToken) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
         List<Parcel> parcels = parcelRepository.findByFarmIdWithinBounds(farmId, minLng, minLat, maxLng, maxLat);
-        if (!permissionService.canViewFarm(farmId, username)) {
+        if (!permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
             Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
                     .map(share -> share.getParcel().getId())
                     .collect(java.util.stream.Collectors.toSet());
@@ -302,6 +445,8 @@ public class FarmService {
                                          Double maxLat,
                                          Double maxLng,
                                          String shareToken) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
         LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
@@ -333,7 +478,7 @@ public class FarmService {
                 resolvedMaxLat
         );
 
-        if (!permissionService.canViewFarm(farmId, username)) {
+        if (!permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
             Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
                 .map(share -> share.getParcel().getId())
                 .collect(java.util.stream.Collectors.toSet());
@@ -365,8 +510,10 @@ public class FarmService {
         // Verify farm exists and user has permission
         Farm farm = farmRepository.findById(farmId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
-        if (!permissionService.canEditFarm(farmId, username)) {
+        if (!permissionService.canEditFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only add parcels to farms you can edit");
         }
 
@@ -390,6 +537,11 @@ public class FarmService {
         parcel.setColor(request.getColor());
         parcel.setCreatedAt(LocalDateTime.now());
         parcel.setModifiedAt(LocalDateTime.now());
+        // Audit: track who created / last modified this parcel
+        userRepository.findById(permissionService.currentUserId()).ifPresent(u -> {
+            parcel.setCreatedBy(u);
+            parcel.setUpdatedBy(u);
+        });
 
         // Link to corresponding imported parcel if specified
         if (request.getCorrespondingPacId() != null) {
@@ -416,6 +568,9 @@ public class FarmService {
         }
 
         Parcel saved = parcelRepository.save(parcel);
+        if (farm.isEnableParcelAlerts()) {
+            sendFarmAlert(farm, "Parcel Created", "A new parcel <strong>" + saved.getName() + "</strong> (ID: " + saved.getId() + ") has been <strong>created</strong> by user <strong>" + username + "</strong>.");
+        }
         return toParcelDto(saved);
     }
 
@@ -426,9 +581,11 @@ public class FarmService {
     }
 
     public Optional<ParcelDto> findParcelById(Long parcelId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
         return parcelRepository.findById(parcelId).map(parcel -> {
-            if (!permissionService.canViewParcel(parcel, username)) {
+            if (!permissionService.canViewParcel(parcel, actionUserId, isAdmin)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view parcels you have access to");
             }
             return toParcelDto(parcel);
@@ -436,6 +593,8 @@ public class FarmService {
     }
 
     public Optional<ParcelDto> updateParcel(Long farmId, Long parcelId, CreateParcelRequest request) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         // Require authentication
         final String username;
         try {
@@ -457,7 +616,7 @@ public class FarmService {
             if (!parcel.getFarm().getId().equals(farmId)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
             }
-            if (!permissionService.canEditParcel(parcel, username)) {
+            if (!permissionService.canEditParcel(parcel, actionUserId, isAdmin)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update parcels you can edit");
             }
 
@@ -490,6 +649,8 @@ public class FarmService {
             }
             
             parcel.setModifiedAt(LocalDateTime.now());
+            // Audit: update who last modified this parcel
+            userRepository.findById(permissionService.currentUserId()).ifPresent(parcel::setUpdatedBy);
 
             // Update corresponding imported parcel if specified
             if (request.getCorrespondingPacId() != null) {
@@ -516,11 +677,16 @@ public class FarmService {
             }
 
             Parcel saved = parcelRepository.save(parcel);
+            if (saved.getFarm().isEnableParcelAlerts()) {
+                sendFarmAlert(saved.getFarm(), "Parcel Updated", "Parcel <strong>" + saved.getName() + "</strong> (ID: " + saved.getId() + ") has been <strong>updated</strong> by user <strong>" + username + "</strong>.");
+            }
             return toParcelDto(saved);
         });
     }
 
     private ParcelDto toParcelDto(Parcel p) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
         ParcelDto dto = new ParcelDto();
         dto.setId(p.getId());
@@ -548,12 +714,14 @@ public class FarmService {
         if (p.getParentParcel() != null) {
             dto.setParentParcelId(p.getParentParcel().getId());
         }
-        dto.setCanEdit(permissionService.canEditParcel(p, username));
-        dto.setCanShare(permissionService.canShareParcel(p, username));
+        dto.setCanEdit(permissionService.canEditParcel(p, actionUserId, isAdmin));
+        dto.setCanShare(permissionService.canShareParcel(p, actionUserId, isAdmin));
         return dto;
     }
 
     private ParcelListDto toParcelListDto(Parcel p) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
         ParcelListDto dto = new ParcelListDto();
         dto.setId(p.getId());
@@ -562,14 +730,16 @@ public class FarmService {
         dto.setColor(p.getColor());
         if (p.getFarm() != null) dto.setFarmId(p.getFarm().getId());
         if (p.getPeriod() != null) dto.setPeriodId(p.getPeriod().getId());
-        dto.setCanEdit(permissionService.canEditParcel(p, username));
-        dto.setCanShare(permissionService.canShareParcel(p, username));
+        dto.setCanEdit(permissionService.canEditParcel(p, actionUserId, isAdmin));
+        dto.setCanShare(permissionService.canShareParcel(p, actionUserId, isAdmin));
         return dto;
     }
 
     public List<yt.wer.efms.dto.PeriodDto> listPeriods(Long farmId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
-        if (!permissionService.canViewFarm(farmId, username)) {
+        if (!permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unauthorized");
         }
         return periodRepository.findByFarmId(farmId).stream()
@@ -580,8 +750,10 @@ public class FarmService {
     public yt.wer.efms.dto.PeriodDto createPeriod(Long farmId, yt.wer.efms.dto.CreatePeriodRequest request) {
         Farm farm = farmRepository.findById(farmId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, username)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only create periods for farms you manage");
         }
 
@@ -600,8 +772,10 @@ public class FarmService {
     public Optional<yt.wer.efms.dto.PeriodDto> updatePeriod(Long farmId, Long periodId, yt.wer.efms.dto.CreatePeriodRequest request) {
         farmRepository.findById(farmId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, username)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update periods for farms you manage");
         }
 
@@ -628,7 +802,7 @@ public class FarmService {
     }
 
     private FarmDto toFarmDto(Farm f) {
-        return new FarmDto(
+        FarmDto dto = new FarmDto(
                 f.getId(),
                 f.getName(),
                 f.getDescription(),
@@ -638,8 +812,22 @@ public class FarmService {
                 f.getShowDescription(),
                 f.getShowLocation(),
                 f.getCreatedAt(),
-                f.getModifiedAt()
+                f.getModifiedAt(),
+                f.isEnableMemberAlerts(),
+                f.isEnableParcelAlerts(),
+                f.isEnableOperationAlerts(),
+                f.getAlertRecipientEmail()
         );
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
+        dto.setCanEdit(permissionService.canEditFarm(f.getId(), actionUserId, isAdmin));
+        dto.setCanManage(permissionService.canManageFarm(f.getId(), actionUserId, isAdmin));
+        return dto;
+    }
+
+    /** Public accessor for admin controller usage (e.g. listing deleted farms). */
+    public FarmDto toFarmDtoPublic(Farm f) {
+        return toFarmDto(f);
     }
 
     private FarmDto maskByVisibility(FarmDto dto) {
@@ -650,8 +838,10 @@ public class FarmService {
     }
 
     public List<yt.wer.efms.dto.FarmMemberDto> listMembers(Long farmId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, username)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view members for farms you manage");
         }
         Farm farm = farmRepository.findById(farmId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
@@ -677,16 +867,35 @@ public class FarmService {
         return members;
     }
 
-    public yt.wer.efms.dto.FarmMemberDto addMember(Long farmId, String username, String role) {
+    public yt.wer.efms.dto.FarmMemberDto addMember(Long farmId, Long newUserId, String username, String role) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, current)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only manage members for farms you manage");
         }
         Farm farm = farmRepository.findById(farmId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
-        var user = userRepository.findByUsername(username)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        
+        yt.wer.efms.model.User user;
+        if (newUserId != null) {
+            user = userRepository.findById(newUserId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        } else {
+            user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        }
+
         Role resolvedRole = Role.valueOf(role.toUpperCase());
+
+        if (farm.getOwner() != null && farm.getOwner().getId().equals(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User is the owner of the farm");
+        }
+
         FarmUserId id = new FarmUserId(farmId, user.getId());
+        if (farmUserRepository.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User is already a member of this farm");
+        }
+
         FarmUser farmUser = new FarmUser();
         farmUser.setId(id);
         farmUser.setFarm(farm);
@@ -695,12 +904,19 @@ public class FarmService {
         farmUser.setCreatedAt(LocalDateTime.now());
         farmUser.setModifiedAt(LocalDateTime.now());
         farmUserRepository.save(farmUser);
+
+        if (farm.isEnableMemberAlerts()) {
+            sendFarmAlert(farm, "Member Added", "A new member <strong>" + user.getUsername() + "</strong> (ID: " + user.getId() + ") has been <strong>added</strong> to the farm with the role <strong>" + resolvedRole.name() + "</strong> by user <strong>" + current + "</strong>.");
+        }
+
         return new yt.wer.efms.dto.FarmMemberDto(user.getId(), user.getUsername(), resolvedRole.name(), false);
     }
 
     public Optional<yt.wer.efms.dto.FarmMemberDto> updateMember(Long farmId, Long userId, String role) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, current)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only manage members for farms you manage");
         }
         FarmUserId id = new FarmUserId(farmId, userId);
@@ -709,22 +925,36 @@ public class FarmService {
             fu.setRole(resolvedRole);
             fu.setModifiedAt(LocalDateTime.now());
             farmUserRepository.save(fu);
+
+            if (fu.getFarm().isEnableMemberAlerts()) {
+                sendFarmAlert(fu.getFarm(), "Member Updated", "The role of member <strong>" + fu.getUser().getUsername() + "</strong> (ID: " + fu.getUser().getId() + ") was <strong>updated</strong> to <strong>" + resolvedRole.name() + "</strong> by user <strong>" + current + "</strong>.");
+            }
+
             return new yt.wer.efms.dto.FarmMemberDto(fu.getUser().getId(), fu.getUser().getUsername(), resolvedRole.name(), false);
         });
     }
 
     public void removeMember(Long farmId, Long userId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, current)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only manage members for farms you manage");
         }
         FarmUserId id = new FarmUserId(farmId, userId);
-        farmUserRepository.deleteById(id);
+        farmUserRepository.findById(id).ifPresent(fu -> {
+            farmUserRepository.delete(fu);
+            if (fu.getFarm().isEnableMemberAlerts()) {
+                sendFarmAlert(fu.getFarm(), "Member Removed", "Member <strong>" + fu.getUser().getUsername() + "</strong> (ID: " + fu.getUser().getId() + ") was <strong>removed</strong> from the farm by user <strong>" + current + "</strong>.");
+            }
+        });
     }
 
     public List<yt.wer.efms.dto.ResearchZoneShareDto> listResearchZoneShares(Long farmId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, current)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view research shares for farms you manage");
         }
         return researchZoneShareRepository.findByFarmId(farmId).stream()
@@ -733,6 +963,8 @@ public class FarmService {
     }
 
     public List<yt.wer.efms.dto.ResearchZoneShareDto> listEnrolledResearchZoneShares(Long farmId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
         if (current == null || current.equals("anonymousUser")) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
@@ -749,8 +981,10 @@ public class FarmService {
     }
 
     public yt.wer.efms.dto.ResearchZoneShareDto addResearchZoneShare(Long farmId, yt.wer.efms.dto.ResearchZoneShareRequest request) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, current)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only create research shares for farms you manage");
         }
 
@@ -765,7 +999,7 @@ public class FarmService {
 
         Farm farm = farmRepository.findById(farmId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Farm not found"));
-        User creator = userRepository.findByUsername(current)
+        User creator = userRepository.findById(actionUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
 
         User recipient = null;
@@ -843,8 +1077,10 @@ public class FarmService {
     public Optional<yt.wer.efms.dto.ResearchZoneShareDto> updateResearchZoneShare(Long farmId,
                                                                                      Long shareId,
                                                                                      yt.wer.efms.dto.ResearchZoneShareRequest request) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, current)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update research shares for farms you manage");
         }
 
@@ -933,6 +1169,8 @@ public class FarmService {
     }
 
     public Optional<yt.wer.efms.dto.ResearchZoneShareDto> claimResearchZoneShare(Long farmId, String token) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
         if (current == null || current.equals("anonymousUser")) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
@@ -941,7 +1179,7 @@ public class FarmService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "token is required");
         }
 
-        User currentUser = userRepository.findByUsername(current)
+        User currentUser = userRepository.findById(actionUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
 
         return researchZoneShareRepository.findByShareToken(token.trim()).map(share -> {
@@ -960,6 +1198,8 @@ public class FarmService {
     }
 
     public Optional<yt.wer.efms.dto.ResearchZoneShareDto> resolveResearchZoneShare(String token) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
         if (current == null || current.equals("anonymousUser")) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
@@ -968,7 +1208,7 @@ public class FarmService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "token is required");
         }
 
-        User currentUser = userRepository.findByUsername(current)
+        User currentUser = userRepository.findById(actionUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
 
         return researchZoneShareRepository.findByShareToken(token.trim()).map(share -> {
@@ -984,8 +1224,10 @@ public class FarmService {
     }
 
     public void removeResearchZoneShare(Long farmId, Long shareId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(farmId, current)) {
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only remove research shares for farms you manage");
         }
 
@@ -998,11 +1240,13 @@ public class FarmService {
     }
 
     public Optional<yt.wer.efms.dto.ResearchZoneShareDto> leaveResearchZoneShare(Long farmId, Long shareId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
         if (current == null || current.equals("anonymousUser")) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
         }
-        User currentUser = userRepository.findByUsername(current)
+        User currentUser = userRepository.findById(actionUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
 
         return researchZoneShareRepository.findById(shareId).map(share -> {
@@ -1284,12 +1528,14 @@ public class FarmService {
     }
 
     public List<yt.wer.efms.dto.ParcelShareDto> listParcelShares(Long farmId, Long parcelId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
         Parcel parcel = permissionService.requireParcel(parcelId);
         if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
         }
-        if (!permissionService.canShareParcel(parcel, username)) {
+        if (!permissionService.canShareParcel(parcel, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view shares for parcels you manage");
         }
         return parcelShareRepository.findByParcelId(parcelId).stream()
@@ -1302,19 +1548,21 @@ public class FarmService {
     }
 
     public yt.wer.efms.dto.ParcelShareDto addParcelShare(Long farmId, Long parcelId, String username, String role) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
         Parcel parcel = permissionService.requireParcel(parcelId);
         if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
         }
-        if (!permissionService.canShareParcel(parcel, current)) {
+        if (!permissionService.canShareParcel(parcel, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only share parcels you manage");
         }
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         ParcelShareRole resolvedRole = ParcelShareRole.valueOf(role.toUpperCase());
 
-        ParcelShare share = parcelShareRepository.findByParcelIdAndUserUsername(parcelId, username)
+        ParcelShare share = parcelShareRepository.findFirstByParcelIdAndUserUsername(parcelId, username)
                 .orElseGet(ParcelShare::new);
         share.setParcel(parcel);
         share.setUser(user);
@@ -1325,18 +1573,20 @@ public class FarmService {
     }
 
     public Optional<yt.wer.efms.dto.ParcelShareDto> updateParcelShare(Long farmId, Long parcelId, Long userId, String role) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
         Parcel parcel = permissionService.requireParcel(parcelId);
         if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
         }
-        if (!permissionService.canShareParcel(parcel, current)) {
+        if (!permissionService.canShareParcel(parcel, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only share parcels you manage");
         }
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         ParcelShareRole resolvedRole = ParcelShareRole.valueOf(role.toUpperCase());
-        return parcelShareRepository.findByParcelIdAndUserUsername(parcelId, user.getUsername()).map(share -> {
+        return parcelShareRepository.findFirstByParcelIdAndUserUsername(parcelId, user.getUsername()).map(share -> {
             share.setRole(resolvedRole);
             ParcelShare saved = parcelShareRepository.save(share);
             return new yt.wer.efms.dto.ParcelShareDto(saved.getUser().getId(), saved.getUser().getUsername(), saved.getRole().name());
@@ -1344,18 +1594,22 @@ public class FarmService {
     }
 
     public void removeParcelShare(Long farmId, Long parcelId, Long userId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
         Parcel parcel = permissionService.requireParcel(parcelId);
         if (parcel.getFarm() == null || !parcel.getFarm().getId().equals(farmId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcel does not belong to this farm");
         }
-        if (!permissionService.canShareParcel(parcel, current)) {
+        if (!permissionService.canShareParcel(parcel, actionUserId, isAdmin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only share parcels you manage");
         }
         parcelShareRepository.deleteByParcelIdAndUserId(parcelId, userId);
     }
 
     public List<yt.wer.efms.dto.ResearchZoneShareDto> getResearchSharesForParcel(Long farmId, Long parcelId, String shareToken) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
         List<ResearchZoneShare> allShares = resolveActiveResearchShares(farmId, username, shareToken);
         if (allShares.isEmpty()) return List.of();

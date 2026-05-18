@@ -15,6 +15,10 @@ public class FarmDto {
     private LocalDateTime modifiedAt;
     private Boolean canEdit;
     private Boolean canManage;
+    private Boolean enableMemberAlerts;
+    private Boolean enableParcelAlerts;
+    private Boolean enableOperationAlerts;
+    private String alertRecipientEmail;
 
     public FarmDto() {}
 
@@ -31,6 +35,27 @@ public class FarmDto {
         this.showLocation = showLocation;
         this.createdAt = createdAt;
         this.modifiedAt = modifiedAt;
+    }
+
+    public FarmDto(Long id, String name, String description, String location, Boolean isPublic,
+                   Boolean showName, Boolean showDescription, Boolean showLocation,
+                   LocalDateTime createdAt, LocalDateTime modifiedAt,
+                   Boolean enableMemberAlerts, Boolean enableParcelAlerts, Boolean enableOperationAlerts,
+                   String alertRecipientEmail) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+        this.location = location;
+        this.isPublic = isPublic;
+        this.showName = showName;
+        this.showDescription = showDescription;
+        this.showLocation = showLocation;
+        this.createdAt = createdAt;
+        this.modifiedAt = modifiedAt;
+        this.enableMemberAlerts = enableMemberAlerts;
+        this.enableParcelAlerts = enableParcelAlerts;
+        this.enableOperationAlerts = enableOperationAlerts;
+        this.alertRecipientEmail = alertRecipientEmail;
     }
 
     public Long getId() { return id; }
@@ -68,4 +93,16 @@ public class FarmDto {
 
     public Boolean getCanManage() { return canManage; }
     public void setCanManage(Boolean canManage) { this.canManage = canManage; }
+
+    public Boolean getEnableMemberAlerts() { return enableMemberAlerts; }
+    public void setEnableMemberAlerts(Boolean enableMemberAlerts) { this.enableMemberAlerts = enableMemberAlerts; }
+
+    public Boolean getEnableParcelAlerts() { return enableParcelAlerts; }
+    public void setEnableParcelAlerts(Boolean enableParcelAlerts) { this.enableParcelAlerts = enableParcelAlerts; }
+
+    public Boolean getEnableOperationAlerts() { return enableOperationAlerts; }
+    public void setEnableOperationAlerts(Boolean enableOperationAlerts) { this.enableOperationAlerts = enableOperationAlerts; }
+
+    public String getAlertRecipientEmail() { return alertRecipientEmail; }
+    public void setAlertRecipientEmail(String alertRecipientEmail) { this.alertRecipientEmail = alertRecipientEmail; }
 }

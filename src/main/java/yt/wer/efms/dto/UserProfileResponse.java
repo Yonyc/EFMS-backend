@@ -9,16 +9,18 @@ public class UserProfileResponse {
     private TutorialState tutorialState;
     private boolean operationsPopupTopRight;
     private String avatarUrl;
+    private boolean admin;
 
     public UserProfileResponse() {}
 
-    public UserProfileResponse(Long id, String username, String email, TutorialState tutorialState, boolean operationsPopupTopRight, String avatarUrl) {
+    public UserProfileResponse(Long id, String username, String email, TutorialState tutorialState, boolean operationsPopupTopRight, String avatarUrl, boolean admin) {
         this.id = id;
         this.username = username;
         this.email = email;
         this.tutorialState = tutorialState;
         this.operationsPopupTopRight = operationsPopupTopRight;
         this.avatarUrl = avatarUrl;
+        this.admin = admin;
     }
 
     public Long getId() { return id; }
@@ -38,4 +40,7 @@ public class UserProfileResponse {
 
     public String getAvatarUrl() { return avatarUrl; }
     public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
+
+    public boolean isAdmin() { return admin; }
+    public void setAdmin(boolean admin) { this.admin = admin; }
 }

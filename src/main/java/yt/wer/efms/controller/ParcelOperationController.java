@@ -24,8 +24,17 @@ public class ParcelOperationController {
     }
 
     @GetMapping("/farm/{farmId}/parcels/{parcelId}/operations")
-    public ResponseEntity<List<ParcelOperationDto>> listOperations(@PathVariable Long farmId, @PathVariable Long parcelId, @RequestParam(required = false) String shareToken) {
+    public ResponseEntity<?> listOperations(
+            @PathVariable Long farmId,
+            @PathVariable Long parcelId,
+            @RequestParam(required = false) String shareToken,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
         try {
+            if (page != null) {
+                int pageSize = size != null ? size : 10;
+                return ResponseEntity.ok(parcelOperationService.listOperationsForParcel(farmId, parcelId, shareToken, org.springframework.data.domain.PageRequest.of(page, pageSize)));
+            }
             return ResponseEntity.ok(parcelOperationService.listOperationsForParcel(farmId, parcelId, shareToken));
         } catch (RuntimeException ex) {
             if (ex.getMessage() != null && ex.getMessage().toLowerCase().contains("found")) {
@@ -68,6 +77,22 @@ public class ParcelOperationController {
                 return ResponseEntity.notFound().build();
             }
             return ResponseEntity.status(401).build();
+        }
+    }
+
+    @DeleteMapping("/farm/{farmId}/parcels/{parcelId}/operations/{operationId}")
+    public ResponseEntity<Void> deleteOperation(@PathVariable Long farmId,
+                                                @PathVariable Long parcelId,
+                                                @PathVariable Long operationId) {
+        try {
+            boolean deleted = parcelOperationService.deleteOperation(farmId, parcelId, operationId);
+            return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+        } catch (RuntimeException ex) {
+            String message = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+            if (message.contains("not found")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.status(403).build();
         }
     }
 }

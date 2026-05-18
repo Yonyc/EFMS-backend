@@ -43,7 +43,13 @@ public class FarmController {
     }
 
     @GetMapping("/public")
-    public List<FarmDto> listPublic() {
+    public Object listPublic(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null) {
+            int pageSize = size != null ? size : 10;
+            return farmService.listPublic(org.springframework.data.domain.PageRequest.of(page, pageSize));
+        }
         return farmService.listPublic();
     }
 
@@ -243,8 +249,10 @@ public class FarmController {
 
     @GetMapping("/{id}/members")
     public ResponseEntity<List<FarmMemberDto>> listMembers(@PathVariable Long id) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
-        if (!permissionService.canManageFarm(id, username)) {
+        if (!permissionService.canManageFarm(id, actionUserId, isAdmin)) {
             return ResponseEntity.status(403).build();
         }
         return ResponseEntity.ok(farmService.listMembers(id));
@@ -252,7 +260,7 @@ public class FarmController {
 
     @PostMapping("/{id}/members")
     public ResponseEntity<FarmMemberDto> addMember(@PathVariable Long id, @RequestBody FarmMemberRequest request) {
-        FarmMemberDto created = farmService.addMember(id, request.getUsername(), request.getRole());
+        FarmMemberDto created = farmService.addMember(id, request.getUserId(), request.getUsername(), request.getRole());
         return ResponseEntity.created(URI.create("/farm/" + id + "/members/" + created.getUserId())).body(created);
     }
 

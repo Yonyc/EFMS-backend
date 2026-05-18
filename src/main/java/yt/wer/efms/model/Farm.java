@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "farms")
@@ -38,13 +39,27 @@ public class Farm {
     @Column(name = "show_location")
     private Boolean showLocation = true;
 
+    @Column(name = "approved", nullable = false, columnDefinition = "boolean default true")
+    private boolean approved = true;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "deleted_by")
+    @JsonIgnore
+    private User deletedBy;
+
     @OneToMany(mappedBy = "farm")
+    @JsonIgnore
     private Set<Parcel> parcels = new HashSet<>();
 
     @OneToMany(mappedBy = "farm")
+    @JsonIgnore
     private Set<Tool> tools = new HashSet<>();
 
     @OneToMany(mappedBy = "farm")
+    @JsonIgnore
     private Set<Product> products = new HashSet<>();
 
     public Long getId() { return id; }
@@ -77,6 +92,15 @@ public class Farm {
     public Boolean getShowLocation() { return showLocation; }
     public void setShowLocation(Boolean showLocation) { this.showLocation = showLocation; }
 
+    public boolean isApproved() { return approved; }
+    public void setApproved(boolean approved) { this.approved = approved; }
+
+    public LocalDateTime getDeletedAt() { return deletedAt; }
+    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
+
+    public User getDeletedBy() { return deletedBy; }
+    public void setDeletedBy(User deletedBy) { this.deletedBy = deletedBy; }
+
     public Set<Parcel> getParcels() { return parcels; }
     public void setParcels(Set<Parcel> parcels) { this.parcels = parcels; }
 
@@ -88,8 +112,33 @@ public class Farm {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner")
+    @JsonIgnore
     private User owner;
 
     public User getOwner() { return owner; }
     public void setOwner(User owner) { this.owner = owner; }
+
+    @Column(name = "enable_member_alerts", nullable = false, columnDefinition = "boolean default false")
+    private boolean enableMemberAlerts = false;
+
+    @Column(name = "enable_parcel_alerts", nullable = false, columnDefinition = "boolean default false")
+    private boolean enableParcelAlerts = false;
+
+    @Column(name = "enable_operation_alerts", nullable = false, columnDefinition = "boolean default false")
+    private boolean enableOperationAlerts = false;
+
+    @Column(name = "alert_recipient_email")
+    private String alertRecipientEmail;
+
+    public boolean isEnableMemberAlerts() { return enableMemberAlerts; }
+    public void setEnableMemberAlerts(boolean enableMemberAlerts) { this.enableMemberAlerts = enableMemberAlerts; }
+
+    public boolean isEnableParcelAlerts() { return enableParcelAlerts; }
+    public void setEnableParcelAlerts(boolean enableParcelAlerts) { this.enableParcelAlerts = enableParcelAlerts; }
+
+    public boolean isEnableOperationAlerts() { return enableOperationAlerts; }
+    public void setEnableOperationAlerts(boolean enableOperationAlerts) { this.enableOperationAlerts = enableOperationAlerts; }
+
+    public String getAlertRecipientEmail() { return alertRecipientEmail; }
+    public void setAlertRecipientEmail(String alertRecipientEmail) { this.alertRecipientEmail = alertRecipientEmail; }
 }

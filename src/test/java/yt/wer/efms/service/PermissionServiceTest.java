@@ -62,55 +62,55 @@ class PermissionServiceTest {
 
     @Test
     void canManageFarmIsTrueForOwner() {
-        Farm farm = farm(1L, "owner");
+        Farm farm = farm(1L, 811L);
         when(farmRepository.findById(1L)).thenReturn(Optional.of(farm));
 
-        assertTrue(permissionService.canManageFarm(1L, "owner"));
+        assertTrue(permissionService.canManageFarm(1L, 811L, false));
     }
 
     @Test
     void canManageFarmIsTrueForAdminMember() {
-        Farm farm = farm(2L, "owner");
+        Farm farm = farm(2L, 811L);
         FarmUser farmUser = new FarmUser();
         farmUser.setRole(Role.ADMIN);
 
         when(farmRepository.findById(2L)).thenReturn(Optional.of(farm));
-        when(farmUserRepository.findByFarmIdAndUserUsername(2L, "alex")).thenReturn(Optional.of(farmUser));
+        when(farmUserRepository.findByFarmIdAndUserId(2L, 310L)).thenReturn(Optional.of(farmUser));
 
-        assertTrue(permissionService.canManageFarm(2L, "alex"));
+        assertTrue(permissionService.canManageFarm(2L, 310L, false));
     }
 
     @Test
     void canEditFarmIsTrueForEditorMember() {
-        Farm farm = farm(3L, "owner");
+        Farm farm = farm(3L, 811L);
         FarmUser farmUser = new FarmUser();
         farmUser.setRole(Role.EDITOR);
 
         when(farmRepository.findById(3L)).thenReturn(Optional.of(farm));
-        when(farmUserRepository.findByFarmIdAndUserUsername(3L, "editor")).thenReturn(Optional.of(farmUser));
+        when(farmUserRepository.findByFarmIdAndUserId(3L, 192L)).thenReturn(Optional.of(farmUser));
 
-        assertTrue(permissionService.canEditFarm(3L, "editor"));
+        assertTrue(permissionService.canEditFarm(3L, 192L, false));
     }
 
     @Test
     void canManageFarmIsFalseForEditorMember() {
-        Farm farm = farm(4L, "owner");
+        Farm farm = farm(4L, 811L);
         FarmUser farmUser = new FarmUser();
         farmUser.setRole(Role.EDITOR);
 
         when(farmRepository.findById(4L)).thenReturn(Optional.of(farm));
-        when(farmUserRepository.findByFarmIdAndUserUsername(4L, "editor")).thenReturn(Optional.of(farmUser));
+        when(farmUserRepository.findByFarmIdAndUserId(4L, 192L)).thenReturn(Optional.of(farmUser));
 
-        assertFalse(permissionService.canManageFarm(4L, "editor"));
+        assertFalse(permissionService.canManageFarm(4L, 192L, false));
     }
 
     @Test
     void canViewFarmIsFalseForUnknownUser() {
-        Farm farm = farm(5L, "owner");
+        Farm farm = farm(5L, 811L);
         when(farmRepository.findById(5L)).thenReturn(Optional.of(farm));
-        when(farmUserRepository.findByFarmIdAndUserUsername(5L, "stranger")).thenReturn(Optional.empty());
+        when(farmUserRepository.findByFarmIdAndUserId(5L, 395L)).thenReturn(Optional.empty());
 
-        assertFalse(permissionService.canViewFarm(5L, "stranger"));
+        assertFalse(permissionService.canViewFarm(5L, 395L, false));
     }
 
     @Test
@@ -119,9 +119,9 @@ class PermissionServiceTest {
         ParcelShare share = new ParcelShare();
         share.setRole(ParcelShareRole.VIEWER);
 
-        when(parcelShareRepository.findByParcelIdAndUserUsername(11L, "viewer")).thenReturn(Optional.of(share));
+        when(parcelShareRepository.findFirstByParcelIdAndUserId(11L, 82L)).thenReturn(Optional.of(share));
 
-        assertTrue(permissionService.canViewParcel(parcel, "viewer"));
+        assertTrue(permissionService.canViewParcel(parcel, 82L, false));
     }
 
     @Test
@@ -130,9 +130,9 @@ class PermissionServiceTest {
         ParcelShare share = new ParcelShare();
         share.setRole(ParcelShareRole.EDITOR);
 
-        when(parcelShareRepository.findByParcelIdAndUserUsername(12L, "editor")).thenReturn(Optional.of(share));
+        when(parcelShareRepository.findFirstByParcelIdAndUserId(12L, 192L)).thenReturn(Optional.of(share));
 
-        assertTrue(permissionService.canEditParcel(parcel, "editor"));
+        assertTrue(permissionService.canEditParcel(parcel, 192L, false));
     }
 
     @Test
@@ -141,50 +141,50 @@ class PermissionServiceTest {
         ParcelShare share = new ParcelShare();
         share.setRole(ParcelShareRole.VIEWER);
 
-        when(parcelShareRepository.findByParcelIdAndUserUsername(14L, "viewer")).thenReturn(Optional.of(share));
+        when(parcelShareRepository.findFirstByParcelIdAndUserId(14L, 82L)).thenReturn(Optional.of(share));
 
-        assertFalse(permissionService.canEditParcel(parcel, "viewer"));
+        assertFalse(permissionService.canEditParcel(parcel, 82L, false));
     }
 
     @Test
     void canShareParcelIsFalseWhenParcelHasNoFarm() {
         Parcel parcel = parcel(15L, null);
 
-        assertFalse(permissionService.canShareParcel(parcel, "owner"));
+        assertFalse(permissionService.canShareParcel(parcel, 811L, false));
     }
 
     @Test
     void canShareParcelIsTrueForFarmOwner() {
-        Farm farm = farm(16L, "owner");
+        Farm farm = farm(16L, 811L);
         Parcel parcel = parcel(16L, farm);
         when(farmRepository.findById(16L)).thenReturn(Optional.of(farm));
 
-        assertTrue(permissionService.canShareParcel(parcel, "owner"));
+        assertTrue(permissionService.canShareParcel(parcel, 811L, false));
     }
 
     @Test
     void canEditParcelUsesFarmRoleWhenParcelHasFarm() {
-        Farm farm = farm(17L, "owner");
+        Farm farm = farm(17L, 811L);
         Parcel parcel = parcel(17L, farm);
         FarmUser farmUser = new FarmUser();
         farmUser.setRole(Role.EDITOR);
 
         when(farmRepository.findById(17L)).thenReturn(Optional.of(farm));
-        when(farmUserRepository.findByFarmIdAndUserUsername(17L, "editor")).thenReturn(Optional.of(farmUser));
+        when(farmUserRepository.findByFarmIdAndUserId(17L, 192L)).thenReturn(Optional.of(farmUser));
 
-        assertTrue(permissionService.canEditParcel(parcel, "editor"));
+        assertTrue(permissionService.canEditParcel(parcel, 192L, false));
     }
 
     @Test
     void getFarmRoleReturnsEmptyWhenUsernameIsNull() {
-        assertTrue(permissionService.getFarmRole(1L, null).isEmpty());
+        assertTrue(permissionService.getFarmRole(1L, (Long) null).isEmpty());
     }
 
     @Test
     void canViewParcelIsFalseForAnonymousWithoutFarmOrShare() {
         Parcel parcel = parcel(13L, null);
 
-        assertFalse(permissionService.canViewParcel(parcel, null));
+        assertFalse(permissionService.canViewParcel(parcel, null, false));
     }
 
     @Test
@@ -212,9 +212,9 @@ class PermissionServiceTest {
         assertEquals(88L, result.getId());
     }
 
-    private static Farm farm(Long id, String ownerUsername) {
+    private static Farm farm(Long id, Long ownerId) {
         User owner = new User();
-        owner.setUsername(ownerUsername);
+        owner.setId(ownerId);
 
         Farm farm = new Farm();
         farm.setId(id);

@@ -1,5 +1,7 @@
 package yt.wer.efms.service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -44,6 +46,12 @@ public class FarmAssetService {
                 .collect(Collectors.toList());
     }
 
+    public Page<ProductDto> listProducts(Long farmId, Pageable pageable) {
+        requireFarmView(farmId);
+        return productRepository.findByFarmId(farmId, pageable)
+                .map(this::toProductDto);
+    }
+
     public Optional<ProductDto> createProduct(Long farmId, ProductInput input) {
         Farm farm = requireFarmEdit(farmId);
         Product p = new Product();
@@ -82,6 +90,12 @@ public class FarmAssetService {
         return toolRepository.findByFarmId(farmId).stream()
                 .map(this::toToolDto)
                 .collect(Collectors.toList());
+    }
+
+    public Page<ToolDto> listTools(Long farmId, Pageable pageable) {
+        requireFarmView(farmId);
+        return toolRepository.findByFarmId(farmId, pageable)
+                .map(this::toToolDto);
     }
 
     public Optional<ToolDto> createTool(Long farmId, ToolInput input) {
@@ -140,16 +154,20 @@ public class FarmAssetService {
     }
 
     private Farm requireFarmView(Long farmId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
-        if (!permissionService.canViewFarm(farmId, username)) {
+        if (!permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
             throw new RuntimeException("You can only view assets for farms you can access");
         }
         return farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));
     }
 
     private Farm requireFarmEdit(Long farmId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
         String username = permissionService.currentUsername();
-        if (!permissionService.canEditFarm(farmId, username)) {
+        if (!permissionService.canEditFarm(farmId, actionUserId, isAdmin)) {
             throw new RuntimeException("You can only manage assets for farms you can edit");
         }
         return farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));

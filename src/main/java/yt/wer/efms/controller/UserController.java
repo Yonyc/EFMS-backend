@@ -26,6 +26,10 @@ import java.nio.file.Paths;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.Map;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/users")
@@ -43,7 +47,7 @@ public class UserController {
             return ResponseEntity.status(401).body("unauthorized");
         }
         User user = userOpt.get();
-        return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl()));
+        return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl(), user.isAdmin()));
     }
 
     @PutMapping("/me")
@@ -70,7 +74,7 @@ public class UserController {
         user.setModifiedAt(LocalDateTime.now());
         userRepository.save(user);
 
-        return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl()));
+        return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl(), user.isAdmin()));
     }
 
     @PutMapping("/me/tutorial-state")
@@ -91,7 +95,7 @@ public class UserController {
         user.setTutorialState(nextState);
         user.setModifiedAt(LocalDateTime.now());
         userRepository.save(user);
-        return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl()));
+        return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl(), user.isAdmin()));
     }
 
     @GetMapping("/me/preferences")
@@ -133,7 +137,7 @@ public class UserController {
             user.setModifiedAt(LocalDateTime.now());
             userRepository.save(user);
 
-            return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl()));
+            return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl(), user.isAdmin()));
         } catch (IOException e) {
             return ResponseEntity.internalServerError().body("avatar_upload_failed");
         }
@@ -163,5 +167,25 @@ public class UserController {
             return Optional.empty();
         }
         return userRepository.findByUsername(authentication.getName());
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<?> searchUsers(@RequestParam("q") String query, Authentication authentication) {
+        Optional<User> userOpt = resolveUser(authentication);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(401).body("unauthorized");
+        }
+
+        if (query == null || query.trim().isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        List<User> matchingUsers = userRepository.findTop10ByUsernameContainingIgnoreCase(query.trim());
+        
+        List<Map<String, Object>> results = matchingUsers.stream()
+                .map(u -> Map.of("id", (Object)u.getId(), "username", (Object)u.getUsername()))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(results);
     }
 }

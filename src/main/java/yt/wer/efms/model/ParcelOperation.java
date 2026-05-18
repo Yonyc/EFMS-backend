@@ -35,6 +35,21 @@ public class ParcelOperation {
     )
     private Set<Parcel> parcels = new HashSet<>();
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "deleted_by")
+    private yt.wer.efms.model.User deletedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
+    private yt.wer.efms.model.User createdBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "updated_by")
+    private yt.wer.efms.model.User updatedBy;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -55,4 +70,16 @@ public class ParcelOperation {
 
     public Set<Parcel> getParcels() { return parcels; }
     public void setParcels(Set<Parcel> parcels) { this.parcels = parcels; }
+
+    public LocalDateTime getDeletedAt() { return deletedAt; }
+    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
+
+    public yt.wer.efms.model.User getDeletedBy() { return deletedBy; }
+    public void setDeletedBy(yt.wer.efms.model.User deletedBy) { this.deletedBy = deletedBy; }
+
+    public yt.wer.efms.model.User getCreatedBy() { return createdBy; }
+    public void setCreatedBy(yt.wer.efms.model.User createdBy) { this.createdBy = createdBy; }
+
+    public yt.wer.efms.model.User getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(yt.wer.efms.model.User updatedBy) { this.updatedBy = updatedBy; }
 }

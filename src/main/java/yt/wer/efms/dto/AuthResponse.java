@@ -7,15 +7,17 @@ public class AuthResponse {
     private boolean operationsPopupTopRight;
     private String email;
     private String avatarUrl;
+    private boolean admin;
 
     public AuthResponse() {}
-    public AuthResponse(String token, Long user_id, yt.wer.efms.model.TutorialState tutorialState, boolean operationsPopupTopRight, String email, String avatarUrl) { 
+    public AuthResponse(String token, Long user_id, yt.wer.efms.model.TutorialState tutorialState, boolean operationsPopupTopRight, String email, String avatarUrl, boolean admin) { 
         this.token = token; 
         this.user_id = user_id;
         this.tutorialState = tutorialState;
         this.operationsPopupTopRight = operationsPopupTopRight;
         this.email = email;
         this.avatarUrl = avatarUrl;
+        this.admin = admin;
     }
     public String getToken() { return token; }
     public void setToken(String token) { this.token = token; }
@@ -31,4 +33,7 @@ public class AuthResponse {
 
     public String getAvatarUrl() { return avatarUrl; }
     public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
+    
+    public boolean isAdmin() { return admin; }
+    public void setAdmin(boolean admin) { this.admin = admin; }
 }

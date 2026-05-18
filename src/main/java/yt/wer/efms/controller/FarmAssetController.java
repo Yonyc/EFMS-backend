@@ -21,8 +21,15 @@ public class FarmAssetController {
     }
 
     @GetMapping("/products")
-    public ResponseEntity<List<ProductDto>> listProducts(@PathVariable Long farmId) {
+    public ResponseEntity<?> listProducts(
+            @PathVariable Long farmId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
         try {
+            if (page != null) {
+                int pageSize = size != null ? size : 10;
+                return ResponseEntity.ok(farmAssetService.listProducts(farmId, org.springframework.data.domain.PageRequest.of(page, pageSize)));
+            }
             return ResponseEntity.ok(farmAssetService.listProducts(farmId));
         } catch (RuntimeException ex) {
             return ResponseEntity.status(401).build();
@@ -65,8 +72,15 @@ public class FarmAssetController {
     }
 
     @GetMapping("/tools")
-    public ResponseEntity<List<ToolDto>> listTools(@PathVariable Long farmId) {
+    public ResponseEntity<?> listTools(
+            @PathVariable Long farmId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
         try {
+            if (page != null) {
+                int pageSize = size != null ? size : 10;
+                return ResponseEntity.ok(farmAssetService.listTools(farmId, org.springframework.data.domain.PageRequest.of(page, pageSize)));
+            }
             return ResponseEntity.ok(farmAssetService.listTools(farmId));
         } catch (RuntimeException ex) {
             return ResponseEntity.status(401).build();
