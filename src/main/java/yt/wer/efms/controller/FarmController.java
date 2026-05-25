@@ -284,13 +284,13 @@ public class FarmController {
 
     @PostMapping("/{id}/parcels/{parcelId}/shares")
     public ResponseEntity<ParcelShareDto> addParcelShare(@PathVariable Long id, @PathVariable Long parcelId, @RequestBody ParcelShareRequest request) {
-        ParcelShareDto created = farmService.addParcelShare(id, parcelId, request.getUsername(), request.getRole());
+        ParcelShareDto created = farmService.addParcelShare(id, parcelId, request.getUsername(), request.getRole(), request.getIncludeChildren());
         return ResponseEntity.created(URI.create("/farm/" + id + "/parcels/" + parcelId + "/shares/" + created.getUserId())).body(created);
     }
 
     @PutMapping("/{id}/parcels/{parcelId}/shares/{userId}")
     public ResponseEntity<ParcelShareDto> updateParcelShare(@PathVariable Long id, @PathVariable Long parcelId, @PathVariable Long userId, @RequestBody ParcelShareRequest request) {
-        return farmService.updateParcelShare(id, parcelId, userId, request.getRole())
+        return farmService.updateParcelShare(id, parcelId, userId, request.getRole(), request.getIncludeChildren())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
