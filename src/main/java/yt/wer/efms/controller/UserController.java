@@ -46,8 +46,7 @@ public class UserController {
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(401).body("unauthorized");
         }
-        User user = userOpt.get();
-        return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl(), user.isAdmin()));
+        return ResponseEntity.ok(UserProfileResponse.fromUser(userOpt.get()));
     }
 
     @PutMapping("/me")
@@ -71,10 +70,30 @@ public class UserController {
             user.setOperationsPopupTopRight(request.getOperationsPopupTopRight());
         }
 
+        if (request.getTimeFormat() != null) {
+            user.setTimeFormat(request.getTimeFormat());
+        }
+
+        if (request.getDateFormat() != null) {
+            user.setDateFormat(request.getDateFormat());
+        }
+
+        if (request.isDefaultFarmIdProvided()) {
+            user.setDefaultFarmId(request.getDefaultFarmId());
+        }
+
+        if (request.getEmailNotificationsEnabled() != null) {
+            user.setEmailNotificationsEnabled(request.getEmailNotificationsEnabled());
+        }
+
+        if (request.isPreferredLanguageProvided()) {
+            user.setPreferredLanguage(request.getPreferredLanguage());
+        }
+
         user.setModifiedAt(LocalDateTime.now());
         userRepository.save(user);
 
-        return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl(), user.isAdmin()));
+        return ResponseEntity.ok(UserProfileResponse.fromUser(user));
     }
 
     @PutMapping("/me/tutorial-state")
@@ -95,7 +114,7 @@ public class UserController {
         user.setTutorialState(nextState);
         user.setModifiedAt(LocalDateTime.now());
         userRepository.save(user);
-        return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl(), user.isAdmin()));
+        return ResponseEntity.ok(UserProfileResponse.fromUser(user));
     }
 
     @GetMapping("/me/preferences")
@@ -137,7 +156,7 @@ public class UserController {
             user.setModifiedAt(LocalDateTime.now());
             userRepository.save(user);
 
-            return ResponseEntity.ok(new UserProfileResponse(user.getId(), user.getUsername(), user.getEmail(), user.getTutorialState(), user.isOperationsPopupTopRight(), user.getAvatarUrl(), user.isAdmin()));
+            return ResponseEntity.ok(UserProfileResponse.fromUser(user));
         } catch (IOException e) {
             return ResponseEntity.internalServerError().body("avatar_upload_failed");
         }
