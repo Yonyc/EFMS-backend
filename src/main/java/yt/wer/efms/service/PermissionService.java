@@ -106,16 +106,30 @@ public class PermissionService {
         if (isAdmin) return true;
         if (parcel.getFarm() != null && canViewFarm(parcel.getFarm().getId(), userId, isAdmin)) return true;
         if (userId == null) return false;
-        return parcelShareRepository.findFirstByParcelIdAndUserId(parcel.getId(), userId).isPresent();
+        return findEffectiveShare(parcel, userId).isPresent();
     }
 
     public boolean canEditParcel(Parcel parcel, Long userId, boolean isAdmin) {
         if (isAdmin) return true;
         if (parcel.getFarm() != null && canEditFarm(parcel.getFarm().getId(), userId, isAdmin)) return true;
         if (userId == null) return false;
-        return parcelShareRepository.findFirstByParcelIdAndUserId(parcel.getId(), userId)
+        return findEffectiveShare(parcel, userId)
                 .map(share -> share.getRole() == ParcelShareRole.EDITOR)
                 .orElse(false);
+    }
+
+    private Optional<ParcelShare> findEffectiveShare(Parcel parcel, Long userId) {
+        if (parcel == null || userId == null) return Optional.empty();
+        Optional<ParcelShare> direct = parcelShareRepository.findFirstByParcelIdAndUserId(parcel.getId(), userId);
+        if (direct.isPresent()) return direct;
+        Parcel ancestor = parcel.getParentParcel();
+        int guard = 32;
+        while (ancestor != null && guard-- > 0) {
+            Optional<ParcelShare> share = parcelShareRepository.findFirstByParcelIdAndUserId(ancestor.getId(), userId);
+            if (share.isPresent() && share.get().isIncludeChildren()) return share;
+            ancestor = ancestor.getParentParcel();
+        }
+        return Optional.empty();
     }
 
     public boolean canShareParcel(Parcel parcel, Long userId, boolean isAdmin) {

@@ -56,6 +56,21 @@ public class User {
     @Column(name = "verification_token")
     private String verificationToken;
 
+    @Column(name = "time_format", length = 8)
+    private String timeFormat;
+
+    @Column(name = "date_format", length = 16)
+    private String dateFormat;
+
+    @Column(name = "default_farm_id")
+    private Long defaultFarmId;
+
+    @Column(name = "email_notifications_enabled", nullable = false, columnDefinition = "boolean default true")
+    private boolean emailNotificationsEnabled = true;
+
+    @Column(name = "preferred_language", length = 8)
+    private String preferredLanguage;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -97,6 +112,21 @@ public class User {
 
     public String getVerificationToken() { return verificationToken; }
     public void setVerificationToken(String verificationToken) { this.verificationToken = verificationToken; }
+
+    public String getTimeFormat() { return timeFormat; }
+    public void setTimeFormat(String timeFormat) { this.timeFormat = timeFormat; }
+
+    public String getDateFormat() { return dateFormat; }
+    public void setDateFormat(String dateFormat) { this.dateFormat = dateFormat; }
+
+    public Long getDefaultFarmId() { return defaultFarmId; }
+    public void setDefaultFarmId(Long defaultFarmId) { this.defaultFarmId = defaultFarmId; }
+
+    public boolean isEmailNotificationsEnabled() { return emailNotificationsEnabled; }
+    public void setEmailNotificationsEnabled(boolean emailNotificationsEnabled) { this.emailNotificationsEnabled = emailNotificationsEnabled; }
+
+    public String getPreferredLanguage() { return preferredLanguage; }
+    public void setPreferredLanguage(String preferredLanguage) { this.preferredLanguage = preferredLanguage; }
 
     @PrePersist
     public void prePersist() {

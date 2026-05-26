@@ -25,6 +25,9 @@ public class ParcelShare {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "include_children", nullable = false, columnDefinition = "boolean default true")
+    private boolean includeChildren = true;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -39,4 +42,7 @@ public class ParcelShare {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public boolean isIncludeChildren() { return includeChildren; }
+    public void setIncludeChildren(boolean includeChildren) { this.includeChildren = includeChildren; }
 }

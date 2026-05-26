@@ -372,6 +372,36 @@ public class FarmService {
         return true;
     }
 
+    private Set<Parcel> expandSharedParcels(Long farmId, String username) {
+        Set<Parcel> result = new HashSet<>();
+        Set<Long> cascadeRoots = new HashSet<>();
+        for (ParcelShare share : parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId)) {
+            Parcel p = share.getParcel();
+            if (p == null) continue;
+            result.add(p);
+            if (share.isIncludeChildren()) cascadeRoots.add(p.getId());
+        }
+        Set<Long> seen = new HashSet<>();
+        for (Parcel p : result) seen.add(p.getId());
+        Set<Long> frontier = new HashSet<>(cascadeRoots);
+        while (!frontier.isEmpty()) {
+            List<Parcel> next = parcelRepository.findByFarmIdAndParentParcelIdInAndDeletedAtIsNull(farmId, frontier);
+            Set<Long> nextFrontier = new HashSet<>();
+            for (Parcel p : next) {
+                if (seen.add(p.getId())) {
+                    result.add(p);
+                    nextFrontier.add(p.getId());
+                }
+            }
+            frontier = nextFrontier;
+        }
+        return result;
+    }
+
+    private Set<Long> expandSharedParcelIds(Long farmId, String username) {
+        return expandSharedParcels(farmId, username).stream().map(Parcel::getId).collect(Collectors.toSet());
+    }
+
     public List<ParcelDto> listParcels(Long farmId, String shareToken) {
         Long actionUserId = permissionService.currentUserId();
         boolean isAdmin = permissionService.isCurrentUserAdmin();
@@ -380,9 +410,7 @@ public class FarmService {
         if (permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
             parcelSet.addAll(parcelRepository.findByFarmIdAndDeletedAtIsNull(farmId));
         } else {
-            parcelSet.addAll(parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
-                    .map(ParcelShare::getParcel)
-                    .collect(Collectors.toSet()));
+            parcelSet.addAll(expandSharedParcels(farmId, username));
             List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
             List<Parcel> researchParcels = findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null, null);
             parcelSet.addAll(researchParcels);
@@ -398,9 +426,7 @@ public class FarmService {
         if (permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
             parcelSet.addAll(parcelRepository.findByFarmIdAndDeletedAtIsNull(farmId));
         } else {
-            parcelSet.addAll(parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
-                    .map(ParcelShare::getParcel)
-                    .collect(Collectors.toSet()));
+            parcelSet.addAll(expandSharedParcels(farmId, username));
             List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
             List<Parcel> researchParcels = findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null, null);
             parcelSet.addAll(researchParcels);
@@ -414,9 +440,7 @@ public class FarmService {
         String username = permissionService.currentUsername();
         List<Parcel> parcels = parcelRepository.findByFarmIdWithinBounds(farmId, minLng, minLat, maxLng, maxLat);
         if (!permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
-            Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
-                    .map(share -> share.getParcel().getId())
-                    .collect(java.util.stream.Collectors.toSet());
+            Set<Long> allowedIds = expandSharedParcelIds(farmId, username);
             List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
                 Set<Long> zoneIds = findParcelsFromResearchShares(
                     farmId,
@@ -489,9 +513,7 @@ public class FarmService {
         );
 
         if (!permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
-            Set<Long> allowedIds = parcelShareRepository.findByUserUsernameAndParcelFarmId(username, farmId).stream()
-                .map(share -> share.getParcel().getId())
-                .collect(java.util.stream.Collectors.toSet());
+            Set<Long> allowedIds = expandSharedParcelIds(farmId, username);
 
             List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
             Set<Long> researchZoneIds = findParcelsFromResearchShares(
@@ -1579,12 +1601,13 @@ public class FarmService {
                 .map(share -> new yt.wer.efms.dto.ParcelShareDto(
                         share.getUser().getId(),
                         share.getUser().getUsername(),
-                        share.getRole().name()
+                        share.getRole().name(),
+                        share.isIncludeChildren()
                 ))
                 .collect(Collectors.toList());
     }
 
-    public yt.wer.efms.dto.ParcelShareDto addParcelShare(Long farmId, Long parcelId, String username, String role) {
+    public yt.wer.efms.dto.ParcelShareDto addParcelShare(Long farmId, Long parcelId, String username, String role, Boolean includeChildren) {
         Long actionUserId = permissionService.currentUserId();
         boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
@@ -1604,12 +1627,13 @@ public class FarmService {
         share.setParcel(parcel);
         share.setUser(user);
         share.setRole(resolvedRole);
+        share.setIncludeChildren(includeChildren == null ? true : includeChildren);
         if (share.getCreatedAt() == null) share.setCreatedAt(LocalDateTime.now());
         ParcelShare saved = parcelShareRepository.save(share);
-        return new yt.wer.efms.dto.ParcelShareDto(saved.getUser().getId(), saved.getUser().getUsername(), saved.getRole().name());
+        return new yt.wer.efms.dto.ParcelShareDto(saved.getUser().getId(), saved.getUser().getUsername(), saved.getRole().name(), saved.isIncludeChildren());
     }
 
-    public Optional<yt.wer.efms.dto.ParcelShareDto> updateParcelShare(Long farmId, Long parcelId, Long userId, String role) {
+    public Optional<yt.wer.efms.dto.ParcelShareDto> updateParcelShare(Long farmId, Long parcelId, Long userId, String role, Boolean includeChildren) {
         Long actionUserId = permissionService.currentUserId();
         boolean isAdmin = permissionService.isCurrentUserAdmin();
         String current = permissionService.currentUsername();
@@ -1622,11 +1646,15 @@ public class FarmService {
         }
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-        ParcelShareRole resolvedRole = ParcelShareRole.valueOf(role.toUpperCase());
         return parcelShareRepository.findFirstByParcelIdAndUserUsername(parcelId, user.getUsername()).map(share -> {
-            share.setRole(resolvedRole);
+            if (role != null) {
+                share.setRole(ParcelShareRole.valueOf(role.toUpperCase()));
+            }
+            if (includeChildren != null) {
+                share.setIncludeChildren(includeChildren);
+            }
             ParcelShare saved = parcelShareRepository.save(share);
-            return new yt.wer.efms.dto.ParcelShareDto(saved.getUser().getId(), saved.getUser().getUsername(), saved.getRole().name());
+            return new yt.wer.efms.dto.ParcelShareDto(saved.getUser().getId(), saved.getUser().getUsername(), saved.getRole().name(), saved.isIncludeChildren());
         });
     }
 

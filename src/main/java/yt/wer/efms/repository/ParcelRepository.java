@@ -16,6 +16,8 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long> {
 	// Active parcels only
 	List<Parcel> findByFarmIdAndDeletedAtIsNull(Long farmId);
 
+	List<Parcel> findByFarmIdAndParentParcelIdInAndDeletedAtIsNull(Long farmId, java.util.Collection<Long> parentIds);
+
 	// All parcels for a farm (including deleted) – used for cascade operations
 	List<Parcel> findByFarmId(Long farmId);
 
