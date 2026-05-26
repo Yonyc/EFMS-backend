@@ -13,6 +13,14 @@ public class OperationProductDto {
     private String toolName;
     private LocalDateTime createdAt;
     private LocalDateTime modifiedAt;
+    private String officialAuthNumber;
+    private String officialDecisionCode;
+    private String officialDateFrom;
+    private String officialDateTo;
+    private String officialUserGroupCode;
+    private String officialFormulationTypeCode;
+    private String officialProductTypeCodes;
+    private String officialVersionTag;
 
     public OperationProductDto() {}
 
@@ -59,4 +67,28 @@ public class OperationProductDto {
 
     public LocalDateTime getModifiedAt() { return modifiedAt; }
     public void setModifiedAt(LocalDateTime modifiedAt) { this.modifiedAt = modifiedAt; }
+
+    public String getOfficialAuthNumber() { return officialAuthNumber; }
+    public void setOfficialAuthNumber(String officialAuthNumber) { this.officialAuthNumber = officialAuthNumber; }
+
+    public String getOfficialDecisionCode() { return officialDecisionCode; }
+    public void setOfficialDecisionCode(String officialDecisionCode) { this.officialDecisionCode = officialDecisionCode; }
+
+    public String getOfficialDateFrom() { return officialDateFrom; }
+    public void setOfficialDateFrom(String officialDateFrom) { this.officialDateFrom = officialDateFrom; }
+
+    public String getOfficialDateTo() { return officialDateTo; }
+    public void setOfficialDateTo(String officialDateTo) { this.officialDateTo = officialDateTo; }
+
+    public String getOfficialUserGroupCode() { return officialUserGroupCode; }
+    public void setOfficialUserGroupCode(String officialUserGroupCode) { this.officialUserGroupCode = officialUserGroupCode; }
+
+    public String getOfficialFormulationTypeCode() { return officialFormulationTypeCode; }
+    public void setOfficialFormulationTypeCode(String officialFormulationTypeCode) { this.officialFormulationTypeCode = officialFormulationTypeCode; }
+
+    public String getOfficialProductTypeCodes() { return officialProductTypeCodes; }
+    public void setOfficialProductTypeCodes(String officialProductTypeCodes) { this.officialProductTypeCodes = officialProductTypeCodes; }
+
+    public String getOfficialVersionTag() { return officialVersionTag; }
+    public void setOfficialVersionTag(String officialVersionTag) { this.officialVersionTag = officialVersionTag; }
 }

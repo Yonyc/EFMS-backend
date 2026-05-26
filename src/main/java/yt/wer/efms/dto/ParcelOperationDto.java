@@ -12,6 +12,9 @@ public class ParcelOperationDto {
     private LocalDateTime createdAt;
     private LocalDateTime modifiedAt;
     private List<OperationProductDto> products;
+    private List<AttachmentDto> attachments;
+    private Long parcelId;
+    private String parcelName;
 
     public ParcelOperationDto() {}
 
@@ -50,4 +53,13 @@ public class ParcelOperationDto {
 
     public List<OperationProductDto> getProducts() { return products; }
     public void setProducts(List<OperationProductDto> products) { this.products = products; }
+
+    public List<AttachmentDto> getAttachments() { return attachments; }
+    public void setAttachments(List<AttachmentDto> attachments) { this.attachments = attachments; }
+
+    public Long getParcelId() { return parcelId; }
+    public void setParcelId(Long parcelId) { this.parcelId = parcelId; }
+
+    public String getParcelName() { return parcelName; }
+    public void setParcelName(String parcelName) { this.parcelName = parcelName; }
 }

@@ -22,6 +22,10 @@ public class OperationType {
     @JoinColumn(name = "default_tool")
     private Tool defaultTool;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "farm")
+    private Farm farm;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -36,4 +40,7 @@ public class OperationType {
 
     public Tool getDefaultTool() { return defaultTool; }
     public void setDefaultTool(Tool defaultTool) { this.defaultTool = defaultTool; }
+
+    public Farm getFarm() { return farm; }
+    public void setFarm(Farm farm) { this.farm = farm; }
 }

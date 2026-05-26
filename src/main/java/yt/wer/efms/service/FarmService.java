@@ -25,6 +25,7 @@ import yt.wer.efms.model.ResearchZoneShare;
 import yt.wer.efms.model.ResearchZoneShareClaim;
 import yt.wer.efms.model.Tool;
 import yt.wer.efms.model.Product;
+import yt.wer.efms.model.OperationType;
 import yt.wer.efms.model.User;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,7 @@ import yt.wer.efms.repository.FarmUserRepository;
 import yt.wer.efms.repository.ToolRepository;
 import yt.wer.efms.repository.ProductRepository;
 import yt.wer.efms.repository.ParcelOperationRepository;
+import yt.wer.efms.repository.OperationTypeRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
@@ -72,6 +74,7 @@ public class FarmService {
     private final ToolRepository toolRepository;
     private final ProductRepository productRepository;
     private final ParcelOperationRepository parcelOperationRepository;
+    private final OperationTypeRepository operationTypeRepository;
     private final EmailService emailService;
     private final WKTReader wktReader = new WKTReader();
     private final WKTWriter wktWriter = new WKTWriter();
@@ -87,6 +90,7 @@ public class FarmService {
                        ToolRepository toolRepository,
                        ProductRepository productRepository,
                        ParcelOperationRepository parcelOperationRepository,
+                       OperationTypeRepository operationTypeRepository,
                        EmailService emailService) {
         this.farmRepository = farmRepository;
         this.systemSettingsRepository = systemSettingsRepository;
@@ -102,6 +106,7 @@ public class FarmService {
         this.toolRepository = toolRepository;
         this.productRepository = productRepository;
         this.parcelOperationRepository = parcelOperationRepository;
+        this.operationTypeRepository = operationTypeRepository;
         this.emailService = emailService;
     }
 
@@ -379,7 +384,7 @@ public class FarmService {
                     .map(ParcelShare::getParcel)
                     .collect(Collectors.toSet()));
             List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
-            List<Parcel> researchParcels = findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null);
+            List<Parcel> researchParcels = findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null, null);
             parcelSet.addAll(researchParcels);
         }
         return parcelSet.stream().map(this::toParcelDto).collect(Collectors.toList());
@@ -397,7 +402,7 @@ public class FarmService {
                     .map(ParcelShare::getParcel)
                     .collect(Collectors.toSet()));
             List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
-            List<Parcel> researchParcels = findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null);
+            List<Parcel> researchParcels = findParcelsFromResearchShares(farmId, activeShares, null, null, null, null, null, null, null, null, null, null, null);
             parcelSet.addAll(researchParcels);
         }
         return parcelSet.stream().map(this::toParcelListDto).collect(Collectors.toList());
@@ -413,9 +418,10 @@ public class FarmService {
                     .map(share -> share.getParcel().getId())
                     .collect(java.util.stream.Collectors.toSet());
             List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
-            Set<Long> zoneIds = findParcelsFromResearchShares(
+                Set<Long> zoneIds = findParcelsFromResearchShares(
                     farmId,
                     activeShares,
+                    null,
                     null,
                     null,
                     null,
@@ -426,7 +432,7 @@ public class FarmService {
                     minLng,
                     maxLat,
                     maxLng
-            ).stream().map(Parcel::getId).collect(Collectors.toSet());
+                ).stream().map(Parcel::getId).collect(Collectors.toSet());
             allowedIds.addAll(zoneIds);
             parcels = parcels.stream().filter(p -> allowedIds.contains(p.getId())).collect(Collectors.toList());
         }
@@ -435,6 +441,7 @@ public class FarmService {
 
     public List<ParcelDto> searchParcels(Long farmId,
                                          Set<Long> periodIds,
+                                         Set<Long> operationTypeIds,
                                          Set<Long> toolIds,
                                          Set<Long> productIds,
                                          LocalDate startDate,
@@ -458,6 +465,7 @@ public class FarmService {
         Double resolvedMaxLng = hasBounds ? maxLng : null;
 
         boolean periodFilter = periodIds != null && !periodIds.isEmpty();
+        boolean operationTypeFilter = operationTypeIds != null && !operationTypeIds.isEmpty();
         boolean toolFilter = toolIds != null && !toolIds.isEmpty();
         boolean productFilter = productIds != null && !productIds.isEmpty();
 
@@ -465,6 +473,8 @@ public class FarmService {
                 farmId,
                 periodFilter,
                 toQueryFilterValues(periodIds),
+                operationTypeFilter,
+                toQueryFilterValues(operationTypeIds),
                 toolFilter,
                 toQueryFilterValues(toolIds),
                 productFilter,
@@ -488,6 +498,7 @@ public class FarmService {
                     farmId,
                     activeShares,
                     periodIds,
+                    operationTypeIds,
                     toolIds,
                     productIds,
                     startDate,
@@ -1009,6 +1020,7 @@ public class FarmService {
         }
 
         Set<Long> periodIds = resolveRequestedIds(request.getPeriodId(), request.getPeriodIds());
+        Set<Long> operationTypeIds = resolveRequestedIds(request.getOperationTypeId(), request.getOperationTypeIds());
         Set<Long> toolIds = resolveRequestedIds(request.getToolId(), request.getToolIds());
         Set<Long> productIds = resolveRequestedIds(request.getProductId(), request.getProductIds());
 
@@ -1028,10 +1040,15 @@ public class FarmService {
             }
         }
 
+        for (Long typeId : operationTypeIds) {
+            operationTypeRepository.findById(typeId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Operation type not found"));
+        }
+
         for (Long productId : productIds) {
             Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
-            if (product.getFarm() == null || !product.getFarm().getId().equals(farmId)) {
+            if (product.getFarm() != null && !product.getFarm().getId().equals(farmId)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product does not belong to this farm");
             }
         }
@@ -1057,9 +1074,11 @@ public class FarmService {
         share.setZoneWkt(request.getZoneWkt());
         share.setShareToken(generateShareToken());
         share.setPeriod(periodIds.size() == 1 ? periodRepository.findById(periodIds.iterator().next()).orElse(null) : null);
+        share.setOperationType(operationTypeIds.size() == 1 ? operationTypeRepository.findById(operationTypeIds.iterator().next()).orElse(null) : null);
         share.setTool(toolIds.size() == 1 ? toolRepository.findById(toolIds.iterator().next()).orElse(null) : null);
         share.setProduct(productIds.size() == 1 ? productRepository.findById(productIds.iterator().next()).orElse(null) : null);
         share.setPeriodIds(toCsv(periodIds));
+        share.setOperationTypeIds(toCsv(operationTypeIds));
         share.setToolIds(toCsv(toolIds));
         share.setProductIds(toCsv(productIds));
         share.setFilterStartDate(request.getFilterStartDate());
@@ -1109,6 +1128,7 @@ public class FarmService {
             }
 
             Set<Long> periodIds = resolveRequestedIds(request.getPeriodId(), request.getPeriodIds());
+            Set<Long> operationTypeIds = resolveRequestedIds(request.getOperationTypeId(), request.getOperationTypeIds());
             Set<Long> toolIds = resolveRequestedIds(request.getToolId(), request.getToolIds());
             Set<Long> productIds = resolveRequestedIds(request.getProductId(), request.getProductIds());
 
@@ -1128,10 +1148,15 @@ public class FarmService {
                 }
             }
 
+            for (Long typeId : operationTypeIds) {
+                operationTypeRepository.findById(typeId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Operation type not found"));
+            }
+
             for (Long productId : productIds) {
                 Product product = productRepository.findById(productId)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
-                if (product.getFarm() == null || !product.getFarm().getId().equals(farmId)) {
+                if (product.getFarm() != null && !product.getFarm().getId().equals(farmId)) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product does not belong to this farm");
                 }
             }
@@ -1151,9 +1176,11 @@ public class FarmService {
             }
 
             share.setPeriod(periodIds.size() == 1 ? periodRepository.findById(periodIds.iterator().next()).orElse(null) : null);
+            share.setOperationType(operationTypeIds.size() == 1 ? operationTypeRepository.findById(operationTypeIds.iterator().next()).orElse(null) : null);
             share.setTool(toolIds.size() == 1 ? toolRepository.findById(toolIds.iterator().next()).orElse(null) : null);
             share.setProduct(productIds.size() == 1 ? productRepository.findById(productIds.iterator().next()).orElse(null) : null);
             share.setPeriodIds(toCsv(periodIds));
+            share.setOperationTypeIds(toCsv(operationTypeIds));
             share.setToolIds(toCsv(toolIds));
             share.setProductIds(toCsv(productIds));
             share.setFilterStartDate(request.getFilterStartDate());
@@ -1278,6 +1305,7 @@ public class FarmService {
 
     private yt.wer.efms.dto.ResearchZoneShareDto toResearchZoneShareDto(ResearchZoneShare share) {
         List<Long> periodIds = toSortedList(getShareFilterIds(share.getPeriodIds(), share.getPeriod() != null ? share.getPeriod().getId() : null));
+        List<Long> operationTypeIds = toSortedList(getShareFilterIds(share.getOperationTypeIds(), share.getOperationType() != null ? share.getOperationType().getId() : null));
         List<Long> toolIds = toSortedList(getShareFilterIds(share.getToolIds(), share.getTool() != null ? share.getTool().getId() : null));
         List<Long> productIds = toSortedList(getShareFilterIds(share.getProductIds(), share.getProduct() != null ? share.getProduct().getId() : null));
         LinkedHashSet<String> accessUsers = new LinkedHashSet<>();
@@ -1295,6 +1323,8 @@ public class FarmService {
                 share.getZoneWkt(),
             periodIds.size() == 1 ? periodIds.get(0) : null,
             periodIds,
+            operationTypeIds.size() == 1 ? operationTypeIds.get(0) : null,
+            operationTypeIds,
             toolIds.size() == 1 ? toolIds.get(0) : null,
             toolIds,
             productIds.size() == 1 ? productIds.get(0) : null,
@@ -1363,6 +1393,7 @@ public class FarmService {
     private List<Parcel> findParcelsFromResearchShares(Long farmId,
                                                        List<ResearchZoneShare> shares,
                                                        Set<Long> periodIds,
+                                                       Set<Long> operationTypeIds,
                                                        Set<Long> toolIds,
                                                        Set<Long> productIds,
                                                        LocalDate startDate,
@@ -1379,14 +1410,17 @@ public class FarmService {
 
         for (ResearchZoneShare share : shares) {
             Set<Long> sharePeriodIds = getShareFilterIds(share.getPeriodIds(), share.getPeriod() != null ? share.getPeriod().getId() : null);
+            Set<Long> shareOperationTypeIds = getShareFilterIds(share.getOperationTypeIds(), share.getOperationType() != null ? share.getOperationType().getId() : null);
             Set<Long> shareToolIds = getShareFilterIds(share.getToolIds(), share.getTool() != null ? share.getTool().getId() : null);
             Set<Long> shareProductIds = getShareFilterIds(share.getProductIds(), share.getProduct() != null ? share.getProduct().getId() : null);
 
             Set<Long> effectivePeriodIds = mergeLockedFilter(periodIds, sharePeriodIds);
+            Set<Long> effectiveOperationTypeIds = mergeLockedFilter(operationTypeIds, shareOperationTypeIds);
             Set<Long> effectiveToolIds = mergeLockedFilter(toolIds, shareToolIds);
             Set<Long> effectiveProductIds = mergeLockedFilter(productIds, shareProductIds);
 
             if (effectivePeriodIds == null) continue;
+            if (effectiveOperationTypeIds == null) continue;
             if (effectiveToolIds == null) continue;
             if (effectiveProductIds == null) continue;
 
@@ -1407,6 +1441,7 @@ public class FarmService {
             LocalDateTime endDateTime = effectiveEndDate != null ? effectiveEndDate.atTime(LocalTime.MAX) : null;
 
             boolean periodFilter = effectivePeriodIds != null && !effectivePeriodIds.isEmpty();
+            boolean operationTypeFilter = effectiveOperationTypeIds != null && !effectiveOperationTypeIds.isEmpty();
             boolean toolFilter = effectiveToolIds != null && !effectiveToolIds.isEmpty();
             boolean productFilter = effectiveProductIds != null && !effectiveProductIds.isEmpty();
 
@@ -1414,6 +1449,8 @@ public class FarmService {
                     farmId,
                     periodFilter,
                     toQueryFilterValues(effectivePeriodIds),
+                    operationTypeFilter,
+                    toQueryFilterValues(effectiveOperationTypeIds),
                     toolFilter,
                     toQueryFilterValues(effectiveToolIds),
                     productFilter,

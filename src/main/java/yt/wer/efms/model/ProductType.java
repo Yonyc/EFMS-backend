@@ -22,6 +22,10 @@ public class ProductType {
     @JoinColumn(name = "unit")
     private Unit unit;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "farm")
+    private Farm farm;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -36,4 +40,7 @@ public class ProductType {
 
     public Unit getUnit() { return unit; }
     public void setUnit(Unit unit) { this.unit = unit; }
+
+    public Farm getFarm() { return farm; }
+    public void setFarm(Farm farm) { this.farm = farm; }
 }

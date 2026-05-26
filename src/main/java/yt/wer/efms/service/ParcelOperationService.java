@@ -18,7 +18,9 @@ import yt.wer.efms.model.ParcelOperation;
 import yt.wer.efms.model.Product;
 import yt.wer.efms.model.Tool;
 import yt.wer.efms.model.Unit;
+import yt.wer.efms.repository.AttachmentRepository;
 import yt.wer.efms.repository.FarmRepository;
+import yt.wer.efms.repository.FarmOperationTypeDefaultToolRepository;
 import yt.wer.efms.repository.OperationProductRepository;
 import yt.wer.efms.repository.OperationTypeRepository;
 import yt.wer.efms.repository.ParcelOperationRepository;
@@ -51,6 +53,8 @@ public class ParcelOperationService {
     private final FarmService farmService;
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final FarmOperationTypeDefaultToolRepository farmOpTypeDefaultRepository;
+    private final AttachmentRepository attachmentRepository;
 
     public ParcelOperationService(ParcelOperationRepository parcelOperationRepository,
                                   ParcelRepository parcelRepository,
@@ -64,7 +68,9 @@ public class ParcelOperationService {
                                   ParcelShareRepository parcelShareRepository,
                                   FarmService farmService,
                                   UserRepository userRepository,
-                                  EmailService emailService) {
+                                  EmailService emailService,
+                                  FarmOperationTypeDefaultToolRepository farmOpTypeDefaultRepository,
+                                  AttachmentRepository attachmentRepository) {
         this.parcelOperationRepository = parcelOperationRepository;
         this.parcelRepository = parcelRepository;
         this.operationTypeRepository = operationTypeRepository;
@@ -78,6 +84,8 @@ public class ParcelOperationService {
         this.farmService = farmService;
         this.userRepository = userRepository;
         this.emailService = emailService;
+        this.farmOpTypeDefaultRepository = farmOpTypeDefaultRepository;
+        this.attachmentRepository = attachmentRepository;
     }
 
     private void sendOperationAlert(Farm farm, String actionType, String details) {
@@ -113,10 +121,83 @@ public class ParcelOperationService {
         emailService.sendEmail(recipient, subject, htmlBody);
     }
 
-    public List<OperationTypeDto> listOperationTypes() {
-        return operationTypeRepository.findAll().stream()
-                .map(t -> new OperationTypeDto(t.getId(), t.getName()))
+    public List<OperationTypeDto> listOperationTypes(Long farmId) {
+        List<yt.wer.efms.model.OperationType> types = farmId != null
+                ? operationTypeRepository.findByFarmIsNullOrFarmIdOrderByIdAsc(farmId)
+                : operationTypeRepository.findByFarmIsNullOrderByIdAsc();
+
+        java.util.Map<Long, yt.wer.efms.model.FarmOperationTypeDefaultTool> defaults =
+                farmId != null
+                        ? farmOpTypeDefaultRepository.findByFarmId(farmId).stream()
+                                .collect(Collectors.toMap(
+                                        d -> d.getOperationType().getId(), d -> d))
+                        : java.util.Collections.emptyMap();
+
+        return types.stream()
+                .map(t -> {
+                    yt.wer.efms.model.FarmOperationTypeDefaultTool def = defaults.get(t.getId());
+                    return new OperationTypeDto(t.getId(), t.getName(),
+                            t.getFarm() != null ? t.getFarm().getId() : null,
+                            def != null ? def.getTool().getId() : null,
+                            def != null ? def.getTool().getName() : null);
+                })
                 .collect(Collectors.toList());
+    }
+
+    public org.springframework.data.domain.Page<OperationTypeDto> listOperationTypes(Long farmId, org.springframework.data.domain.Pageable pageable) {
+        if (farmId == null) {
+            return org.springframework.data.domain.Page.empty(pageable);
+        }
+        java.util.Map<Long, yt.wer.efms.model.FarmOperationTypeDefaultTool> defaults =
+                farmOpTypeDefaultRepository.findByFarmId(farmId).stream()
+                        .collect(Collectors.toMap(d -> d.getOperationType().getId(), d -> d));
+
+        return operationTypeRepository.findByFarmIsNullOrFarmIdOrderByIdAsc(farmId, pageable)
+                .map(t -> {
+                    yt.wer.efms.model.FarmOperationTypeDefaultTool def = defaults.get(t.getId());
+                    return new OperationTypeDto(t.getId(), t.getName(),
+                            t.getFarm() != null ? t.getFarm().getId() : null,
+                            def != null ? def.getTool().getId() : null,
+                            def != null ? def.getTool().getName() : null);
+                });
+    }
+
+    public Page<ParcelOperationDto> listOperationsForFarm(Long farmId, Long parcelId, Long typeId,
+                                                          LocalDateTime dateFrom, LocalDateTime dateTo,
+                                                          Pageable pageable) {
+        requireFarmView(farmId);
+
+        org.springframework.data.jpa.domain.Specification<ParcelOperation> spec = (root, query, cb) -> {
+            jakarta.persistence.criteria.Join<ParcelOperation, Parcel> parcelJoin =
+                    root.join("parcels", jakarta.persistence.criteria.JoinType.INNER);
+
+            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+            predicates.add(cb.equal(parcelJoin.get("farm").get("id"), farmId));
+            predicates.add(cb.isNull(root.get("deletedAt")));
+            if (parcelId != null) predicates.add(cb.equal(parcelJoin.get("id"), parcelId));
+            if (typeId  != null) predicates.add(cb.equal(root.get("type").get("id"), typeId));
+            if (dateFrom != null) predicates.add(cb.greaterThanOrEqualTo(root.get("date"), dateFrom));
+            if (dateTo  != null) predicates.add(cb.lessThanOrEqualTo(root.get("date"), dateTo));
+
+            if (query != null) {
+                query.distinct(true);
+                query.orderBy(cb.desc(root.get("date")));
+            }
+            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+
+        return parcelOperationRepository.findAll(spec, pageable)
+                .map(op -> {
+                    ParcelOperationDto dto = toDto(op);
+                    op.getParcels().stream()
+                            .filter(p -> parcelId == null || p.getId().equals(parcelId))
+                            .findFirst()
+                            .ifPresent(p -> {
+                                dto.setParcelId(p.getId());
+                                dto.setParcelName(p.getName());
+                            });
+                    return dto;
+                });
     }
 
     public List<ParcelOperationDto> listOperationsForParcel(Long farmId, Long parcelId, String shareToken) {
@@ -198,6 +279,11 @@ public class ParcelOperationService {
             boolean hasTool = dto.getProducts().stream()
                     .anyMatch(p -> p.getToolId() != null && share.getToolIds().contains(p.getToolId()));
             if (!hasTool) return false;
+        }
+        if (share.getOperationTypeIds() != null && !share.getOperationTypeIds().isEmpty()) {
+            if (dto.getTypeId() == null || !share.getOperationTypeIds().contains(dto.getTypeId())) {
+                return false;
+            }
         }
         if (share.getProductIds() != null && !share.getProductIds().isEmpty()) {
             boolean hasProduct = dto.getProducts().stream()
@@ -413,7 +499,12 @@ public class ParcelOperationService {
                 .map(this::toProductDto)
                 .collect(Collectors.toList());
 
-        return new ParcelOperationDto(
+        List<yt.wer.efms.dto.AttachmentDto> attachmentDtos = attachmentRepository.findByOperationId(op.getId()).stream()
+                .map(a -> new yt.wer.efms.dto.AttachmentDto(a.getId(), a.getOriginalFilename(),
+                        a.getUrl(), a.getMimeType(), a.getFileSize(), a.getCreatedAt()))
+                .collect(Collectors.toList());
+
+        ParcelOperationDto dto = new ParcelOperationDto(
                 op.getId(),
                 op.getDate(),
                 op.getDurationSeconds(),
@@ -423,10 +514,12 @@ public class ParcelOperationService {
                 op.getModifiedAt(),
                 productDtos
         );
+        dto.setAttachments(attachmentDtos);
+        return dto;
     }
 
     private OperationProductDto toProductDto(OperationProduct opProduct) {
-        return new OperationProductDto(
+        OperationProductDto dto = new OperationProductDto(
                 opProduct.getId(),
                 opProduct.getQuantity(),
                 opProduct.getProduct() != null ? opProduct.getProduct().getId() : null,
@@ -438,6 +531,17 @@ public class ParcelOperationService {
                 opProduct.getCreatedAt(),
                 opProduct.getModifiedAt()
         );
+        if (opProduct.getProduct() != null) {
+            dto.setOfficialAuthNumber(opProduct.getProduct().getOfficialAuthNumber());
+            dto.setOfficialDecisionCode(opProduct.getProduct().getOfficialDecisionCode());
+            dto.setOfficialDateFrom(opProduct.getProduct().getOfficialDateFrom());
+            dto.setOfficialDateTo(opProduct.getProduct().getOfficialDateTo());
+            dto.setOfficialUserGroupCode(opProduct.getProduct().getOfficialUserGroupCode());
+            dto.setOfficialFormulationTypeCode(opProduct.getProduct().getOfficialFormulationTypeCode());
+            dto.setOfficialProductTypeCodes(opProduct.getProduct().getOfficialProductTypeCodes());
+            dto.setOfficialVersionTag(opProduct.getProduct().getOfficialVersionTag());
+        }
+        return dto;
     }
 
     private Farm requireFarmView(Long farmId) {

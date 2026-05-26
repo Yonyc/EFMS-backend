@@ -115,6 +115,8 @@ public class FarmController {
                                                          @RequestParam(required = false) String shareToken,
                                                          @RequestParam(required = false) Long periodId,
                                                          @RequestParam(required = false) List<Long> periodIds,
+                                                         @RequestParam(required = false) Long operationTypeId,
+                                                         @RequestParam(required = false) List<Long> operationTypeIds,
                                                          @RequestParam(required = false) Long toolId,
                                                          @RequestParam(required = false) List<Long> toolIds,
                                                          @RequestParam(required = false) Long productId,
@@ -127,12 +129,14 @@ public class FarmController {
                                                          @RequestParam(required = false) Double maxLat,
                                                          @RequestParam(required = false) Double maxLng) {
         Set<Long> resolvedPeriodIds = mergeFilterValues(periodId, periodIds);
+        Set<Long> resolvedOperationTypeIds = mergeFilterValues(operationTypeId, operationTypeIds);
         Set<Long> resolvedToolIds = mergeFilterValues(toolId, toolIds);
         Set<Long> resolvedProductIds = mergeFilterValues(productId, productIds);
 
         List<ParcelDto> parcels = farmService.searchParcels(
                 id,
                 resolvedPeriodIds,
+                resolvedOperationTypeIds,
                 resolvedToolIds,
                 resolvedProductIds,
                 startDate,

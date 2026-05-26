@@ -1,14 +1,19 @@
 package yt.wer.efms.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class ToolDto {
     private Long id;
     private String name;
     private Long categoryId;
+    private String categoryName;
     private Long farmId;
     private LocalDateTime createdAt;
     private LocalDateTime modifiedAt;
+    private String description;
+    private String pictureUrl;
+    private List<AttachmentDto> attachments;
 
     public ToolDto() {}
 
@@ -30,6 +35,9 @@ public class ToolDto {
     public Long getCategoryId() { return categoryId; }
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
 
+    public String getCategoryName() { return categoryName; }
+    public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
+
     public Long getFarmId() { return farmId; }
     public void setFarmId(Long farmId) { this.farmId = farmId; }
 
@@ -38,4 +46,13 @@ public class ToolDto {
 
     public LocalDateTime getModifiedAt() { return modifiedAt; }
     public void setModifiedAt(LocalDateTime modifiedAt) { this.modifiedAt = modifiedAt; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public String getPictureUrl() { return pictureUrl; }
+    public void setPictureUrl(String pictureUrl) { this.pictureUrl = pictureUrl; }
+
+    public List<AttachmentDto> getAttachments() { return attachments; }
+    public void setAttachments(List<AttachmentDto> attachments) { this.attachments = attachments; }
 }

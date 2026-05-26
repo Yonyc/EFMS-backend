@@ -15,8 +15,13 @@ import yt.wer.efms.model.Farm;
 import yt.wer.efms.repository.FarmRepository;
 import yt.wer.efms.service.EmailService;
 import yt.wer.efms.service.FarmService;
+import yt.wer.efms.service.OfficialProductService;
 import org.springframework.beans.factory.annotation.Value;
+import yt.wer.efms.dto.AdminProductInput;
 import yt.wer.efms.dto.FarmDto;
+import yt.wer.efms.dto.PhytoImportRequest;
+import yt.wer.efms.dto.PhytoImportResult;
+import yt.wer.efms.service.FarmAssetService;
 import java.util.Map;
 import java.util.UUID;
 
@@ -34,6 +39,8 @@ public class AdminController {
     private final PermissionService permissionService;
     private final EmailService emailService;
     private final FarmService farmService;
+    private final OfficialProductService officialProductService;
+    private final FarmAssetService farmAssetService;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -43,7 +50,9 @@ public class AdminController {
             EmailTemplateRepository emailTemplateRepository,
             PermissionService permissionService,
             EmailService emailService,
-            FarmService farmService) {
+            FarmService farmService,
+            OfficialProductService officialProductService,
+            FarmAssetService farmAssetService) {
         this.userRepository = userRepository;
         this.farmRepository = farmRepository;
         this.systemSettingsRepository = systemSettingsRepository;
@@ -51,6 +60,8 @@ public class AdminController {
         this.permissionService = permissionService;
         this.emailService = emailService;
         this.farmService = farmService;
+        this.officialProductService = officialProductService;
+        this.farmAssetService = farmAssetService;
     }
 
     private void requireAdmin() {
@@ -66,9 +77,9 @@ public class AdminController {
         requireAdmin();
         if (page != null) {
             int pageSize = size != null ? size : 10;
-            return userRepository.findAll(org.springframework.data.domain.PageRequest.of(page, pageSize));
+            return userRepository.findAll(org.springframework.data.domain.PageRequest.of(page, pageSize, org.springframework.data.domain.Sort.by("id").ascending()));
         }
-        return userRepository.findAll();
+        return userRepository.findAll(org.springframework.data.domain.Sort.by("id").ascending());
     }
 
     @PutMapping("/users/{id}/admin")
@@ -121,9 +132,9 @@ public class AdminController {
         requireAdmin();
         if (page != null) {
             int pageSize = size != null ? size : 10;
-            return farmRepository.findAll(org.springframework.data.domain.PageRequest.of(page, pageSize));
+            return farmRepository.findAll(org.springframework.data.domain.PageRequest.of(page, pageSize, org.springframework.data.domain.Sort.by("id").ascending()));
         }
-        return farmRepository.findAll();
+        return farmRepository.findAll(org.springframework.data.domain.Sort.by("id").ascending());
     }
 
     @GetMapping("/farms/{id}")
@@ -236,5 +247,19 @@ public class AdminController {
             return emailTemplateRepository.save(e);
         }
         return emailTemplateRepository.save(template);
+    }
+
+    @PutMapping("/products/{productId}")
+    public ResponseEntity<?> adminUpdateProduct(@PathVariable Long productId, @RequestBody AdminProductInput input) {
+        requireAdmin();
+        return farmAssetService.adminUpdateProduct(productId, input)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/phyto/import")
+    public PhytoImportResult importPhyto(@RequestBody PhytoImportRequest request) {
+        requireAdmin();
+        return officialProductService.importFromFile(request.getFilePath(), request.getVersionTag());
     }
 }

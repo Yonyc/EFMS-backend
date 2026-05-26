@@ -36,6 +36,7 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long> {
 			"WHERE p.farm = :farmId " +
 			"AND p.deleted_at IS NULL " +
 			"AND (:periodFilter = false OR p.period IN (:periodIds)) " +
+			"AND (:operationTypeFilter = false OR po.type IN (:operationTypeIds)) " +
 			"AND (:toolFilter = false OR op.tool IN (:toolIds)) " +
 			"AND (:productFilter = false OR op.product IN (:productIds)) " +
 			"AND (CAST(:startDate AS timestamp) IS NULL OR po.date >= CAST(:startDate AS timestamp)) " +
@@ -46,6 +47,8 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long> {
 	List<Parcel> searchParcels(@Param("farmId") Long farmId,
 							  @Param("periodFilter") boolean periodFilter,
 							  @Param("periodIds") List<Long> periodIds,
+						  @Param("operationTypeFilter") boolean operationTypeFilter,
+						  @Param("operationTypeIds") List<Long> operationTypeIds,
 							  @Param("toolFilter") boolean toolFilter,
 							  @Param("toolIds") List<Long> toolIds,
 							  @Param("productFilter") boolean productFilter,

@@ -35,3 +35,4 @@ build/
 .env
 export_pac/
 uploads/
+phyto-files/

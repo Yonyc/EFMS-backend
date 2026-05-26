@@ -1,7 +1,7 @@
 CREATE TYPE "roles" AS ENUM (
   'admin',
-  'user',
-  'share'
+  'editor',
+  'viewer'
 );
 
 CREATE TABLE "imported_parcels" (
@@ -139,6 +139,14 @@ CREATE TABLE "farm_users" (
   "role" roles
 );
 
+CREATE TABLE "parcel_shares" (
+  "id" integer PRIMARY KEY,
+  "created_at" timestamp,
+  "parcel" integer,
+  "user" integer,
+  "role" string
+);
+
 CREATE TABLE "users" (
   "id" integer PRIMARY KEY,
   "created_at" timestamp,
@@ -196,3 +204,7 @@ ALTER TABLE "tools" ADD FOREIGN KEY ("farm") REFERENCES "farms" ("id");
 ALTER TABLE "farm_users" ADD FOREIGN KEY ("farm") REFERENCES "farms" ("id");
 
 ALTER TABLE "farm_users" ADD FOREIGN KEY ("user") REFERENCES "users" ("id");
+
+ALTER TABLE "parcel_shares" ADD FOREIGN KEY ("parcel") REFERENCES "parcels" ("id");
+
+ALTER TABLE "parcel_shares" ADD FOREIGN KEY ("user") REFERENCES "users" ("id");

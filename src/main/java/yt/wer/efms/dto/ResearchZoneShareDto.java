@@ -17,6 +17,8 @@ public class ResearchZoneShareDto {
     private List<Long> toolIds;
     private Long productId;
     private List<Long> productIds;
+    private Long operationTypeId;
+    private List<Long> operationTypeIds;
     private LocalDate filterStartDate;
     private LocalDate filterEndDate;
     private LocalDateTime shareStartAt;
@@ -41,6 +43,8 @@ public class ResearchZoneShareDto {
                                 List<Long> toolIds,
                                 Long productId,
                                 List<Long> productIds,
+                                Long operationTypeId,
+                                List<Long> operationTypeIds,
                                 LocalDate filterStartDate,
                                 LocalDate filterEndDate,
                                 LocalDateTime shareStartAt,
@@ -61,6 +65,8 @@ public class ResearchZoneShareDto {
         this.toolIds = toolIds;
         this.productId = productId;
         this.productIds = productIds;
+        this.operationTypeId = operationTypeId;
+        this.operationTypeIds = operationTypeIds;
         this.filterStartDate = filterStartDate;
         this.filterEndDate = filterEndDate;
         this.shareStartAt = shareStartAt;
@@ -165,6 +171,22 @@ public class ResearchZoneShareDto {
 
     public void setProductIds(List<Long> productIds) {
         this.productIds = productIds;
+    }
+
+    public Long getOperationTypeId() {
+        return operationTypeId;
+    }
+
+    public void setOperationTypeId(Long operationTypeId) {
+        this.operationTypeId = operationTypeId;
+    }
+
+    public List<Long> getOperationTypeIds() {
+        return operationTypeIds;
+    }
+
+    public void setOperationTypeIds(List<Long> operationTypeIds) {
+        this.operationTypeIds = operationTypeIds;
     }
 
     public LocalDate getFilterStartDate() {

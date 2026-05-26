@@ -51,6 +51,13 @@ public class ResearchZoneShare {
     @Column(name = "product_ids", columnDefinition = "TEXT")
     private String productIds;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "operation_type")
+    private OperationType operationType;
+
+    @Column(name = "operation_type_ids", columnDefinition = "TEXT")
+    private String operationTypeIds;
+
     @Column(name = "filter_start_date")
     private LocalDate filterStartDate;
 
@@ -166,6 +173,22 @@ public class ResearchZoneShare {
 
     public void setProductIds(String productIds) {
         this.productIds = productIds;
+    }
+
+    public OperationType getOperationType() {
+        return operationType;
+    }
+
+    public void setOperationType(OperationType operationType) {
+        this.operationType = operationType;
+    }
+
+    public String getOperationTypeIds() {
+        return operationTypeIds;
+    }
+
+    public void setOperationTypeIds(String operationTypeIds) {
+        this.operationTypeIds = operationTypeIds;
     }
 
     public LocalDate getFilterStartDate() {

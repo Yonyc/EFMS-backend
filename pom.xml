@@ -105,6 +105,13 @@
 			<version>1.19.0</version>
 		</dependency>
 
+		<!-- SFTP (JSch fork — actively maintained) -->
+		<dependency>
+			<groupId>com.github.mwiede</groupId>
+			<artifactId>jsch</artifactId>
+			<version>0.2.22</version>
+		</dependency>
+
 		<!-- GeoTools for Shapefile reading (using stable 29.2 version) -->
 		<dependency>
 			<groupId>org.geotools</groupId>

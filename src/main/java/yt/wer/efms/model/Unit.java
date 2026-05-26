@@ -2,6 +2,7 @@ package yt.wer.efms.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import yt.wer.efms.model.Farm;
 
 @Entity
 @Table(name = "units")
@@ -18,6 +19,10 @@ public class Unit {
 
     private String value;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "farm")
+    private Farm farm;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -29,4 +34,7 @@ public class Unit {
 
     public String getValue() { return value; }
     public void setValue(String value) { this.value = value; }
+
+    public Farm getFarm() { return farm; }
+    public void setFarm(Farm farm) { this.farm = farm; }
 }
