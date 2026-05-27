@@ -8,11 +8,21 @@ public class ImportedParcelDto {
     private Long id;
     private LocalDateTime createdAt;
     private LocalDateTime date;
-    private String geodata; // WKT representation for easy consumption
+    private String geodata;
     private ValidationStatus validationStatus;
     private String validationNotes;
     private Long importRecordId;
     private Long convertedParcelId;
+
+    // Source DBF fields
+    private String sourceName;
+    private String sourceCode;
+    private String sourceBlockCode;
+    private String cultureCode;
+    private String cultureLabel;
+    private Double declaredAreaHa;
+    private String sourceGuid;
+    private Integer campaignYear;
 
     public ImportedParcelDto() {}
 
@@ -39,4 +49,28 @@ public class ImportedParcelDto {
 
     public Long getConvertedParcelId() { return convertedParcelId; }
     public void setConvertedParcelId(Long convertedParcelId) { this.convertedParcelId = convertedParcelId; }
+
+    public String getSourceName() { return sourceName; }
+    public void setSourceName(String sourceName) { this.sourceName = sourceName; }
+
+    public String getSourceCode() { return sourceCode; }
+    public void setSourceCode(String sourceCode) { this.sourceCode = sourceCode; }
+
+    public String getSourceBlockCode() { return sourceBlockCode; }
+    public void setSourceBlockCode(String sourceBlockCode) { this.sourceBlockCode = sourceBlockCode; }
+
+    public String getCultureCode() { return cultureCode; }
+    public void setCultureCode(String cultureCode) { this.cultureCode = cultureCode; }
+
+    public String getCultureLabel() { return cultureLabel; }
+    public void setCultureLabel(String cultureLabel) { this.cultureLabel = cultureLabel; }
+
+    public Double getDeclaredAreaHa() { return declaredAreaHa; }
+    public void setDeclaredAreaHa(Double declaredAreaHa) { this.declaredAreaHa = declaredAreaHa; }
+
+    public String getSourceGuid() { return sourceGuid; }
+    public void setSourceGuid(String sourceGuid) { this.sourceGuid = sourceGuid; }
+
+    public Integer getCampaignYear() { return campaignYear; }
+    public void setCampaignYear(Integer campaignYear) { this.campaignYear = campaignYear; }
 }

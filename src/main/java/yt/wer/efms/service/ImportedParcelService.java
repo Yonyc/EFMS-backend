@@ -12,7 +12,10 @@ import yt.wer.efms.model.*;
 import yt.wer.efms.repository.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -134,7 +137,7 @@ public class ImportedParcelService {
 
             // Auto-create a Parcel mirroring the imported geometry
             Parcel newParcel = new Parcel();
-            newParcel.setName("Imported Parcel " + parcel.getId());
+            newParcel.setName(resolveParcelName(parcel, "Imported Parcel " + parcel.getId()));
             newParcel.setFarm(farm);
             newParcel.setActive(true);
             newParcel.setStartValidity(LocalDateTime.now());
@@ -258,6 +261,7 @@ public class ImportedParcelService {
 
         List<ImportedParcel> parcels = importedParcelRepository.findByImportRecordId(importId);
         boolean approvedOnly = request.getConvertOnlyApproved() == null || request.getConvertOnlyApproved();
+        boolean groupByBlock = Boolean.TRUE.equals(request.getGroupByBlock());
         String prefix = (request.getParcelNamePrefix() == null || request.getParcelNamePrefix().isBlank())
                 ? "Imported Parcel"
                 : request.getParcelNamePrefix();
@@ -265,38 +269,88 @@ public class ImportedParcelService {
                 ? "#4CAF50"
                 : request.getDefaultColor();
 
-        int convertedCount = 0;
+        // Filter to the parcels we will actually convert
+        List<ImportedParcel> toConvert = new ArrayList<>();
         int skippedCount = 0;
-        int sequence = 1;
-
-        for (ImportedParcel importedParcel : parcels) {
-            boolean alreadyConverted = importedParcel.getValidationStatus() == ValidationStatus.CONVERTED;
-            boolean notApproved = importedParcel.getValidationStatus() != ValidationStatus.APPROVED;
-
+        for (ImportedParcel ip : parcels) {
+            boolean alreadyConverted = ip.getValidationStatus() == ValidationStatus.CONVERTED;
+            boolean notApproved = ip.getValidationStatus() != ValidationStatus.APPROVED;
             if (alreadyConverted || (approvedOnly && notApproved)) {
                 skippedCount++;
-                continue;
+            } else {
+                toConvert.add(ip);
+            }
+        }
+
+        int convertedCount = 0;
+        LocalDateTime now = LocalDateTime.now();
+
+        if (groupByBlock) {
+            // Group by sourceBlockCode; parcels without a block code go into a null-keyed group
+            Map<String, List<ImportedParcel>> byBlock = new LinkedHashMap<>();
+            for (ImportedParcel ip : toConvert) {
+                String key = (ip.getSourceBlockCode() != null && !ip.getSourceBlockCode().isBlank())
+                        ? ip.getSourceBlockCode() : null;
+                byBlock.computeIfAbsent(key, k -> new ArrayList<>()).add(ip);
             }
 
-            Parcel newParcel = new Parcel();
-            newParcel.setName(prefix + " " + sequence++);
-            newParcel.setFarm(farm);
-            newParcel.setColor(defaultColor);
-            newParcel.setActive(true);
-            newParcel.setStartValidity(LocalDateTime.now());
-            newParcel.setCreatedAt(LocalDateTime.now());
-            newParcel.setCorrespondingPac(importedParcel);
-            if (importedParcel.getGeodata() != null) {
-                newParcel.setGeodata(importedParcel.getGeodata());
+            for (Map.Entry<String, List<ImportedParcel>> entry : byBlock.entrySet()) {
+                String blockCode = entry.getKey();
+                List<ImportedParcel> group = entry.getValue();
+
+                Parcel blockParent = null;
+                if (blockCode != null) {
+                    blockParent = new Parcel();
+                    blockParent.setName("Îlot " + blockCode);
+                    blockParent.setFarm(farm);
+                    blockParent.setColor(defaultColor);
+                    blockParent.setActive(true);
+                    blockParent.setStartValidity(now);
+                    blockParent.setCreatedAt(now);
+                    blockParent = parcelRepository.save(blockParent);
+                }
+
+                int seq = 1;
+                for (ImportedParcel ip : group) {
+                    Parcel child = new Parcel();
+                    child.setName(resolveParcelName(ip, prefix + " " + seq++));
+                    child.setFarm(farm);
+                    child.setColor(defaultColor);
+                    child.setActive(true);
+                    child.setStartValidity(now);
+                    child.setCreatedAt(now);
+                    child.setCorrespondingPac(ip);
+                    child.setParentParcel(blockParent);
+                    if (ip.getGeodata() != null) child.setGeodata(ip.getGeodata());
+
+                    Parcel saved = parcelRepository.save(child);
+                    ip.setValidationStatus(ValidationStatus.CONVERTED);
+                    ip.setParcel(saved);
+                    ip.setModifiedAt(now);
+                    importedParcelRepository.save(ip);
+                    convertedCount++;
+                }
             }
+        } else {
+            int sequence = 1;
+            for (ImportedParcel ip : toConvert) {
+                Parcel newParcel = new Parcel();
+                newParcel.setName(resolveParcelName(ip, prefix + " " + sequence++));
+                newParcel.setFarm(farm);
+                newParcel.setColor(defaultColor);
+                newParcel.setActive(true);
+                newParcel.setStartValidity(now);
+                newParcel.setCreatedAt(now);
+                newParcel.setCorrespondingPac(ip);
+                if (ip.getGeodata() != null) newParcel.setGeodata(ip.getGeodata());
 
-            Parcel savedParcel = parcelRepository.save(newParcel);
-
-            importedParcel.setValidationStatus(ValidationStatus.CONVERTED);
-            importedParcel.setParcel(savedParcel);
-            importedParcel.setModifiedAt(LocalDateTime.now());
-            importedParcelRepository.save(importedParcel);
-            convertedCount++;
+                Parcel savedParcel = parcelRepository.save(newParcel);
+                ip.setValidationStatus(ValidationStatus.CONVERTED);
+                ip.setParcel(savedParcel);
+                ip.setModifiedAt(now);
+                importedParcelRepository.save(ip);
+                convertedCount++;
+            }
         }
 
         return new AssignImportResponse(importId, farm.getId(), convertedCount, skippedCount);
@@ -339,7 +393,7 @@ public class ImportedParcelService {
             }
 
             Parcel newParcel = new Parcel();
-            newParcel.setName("Imported Parcel " + parcel.getId());
+            newParcel.setName(resolveParcelName(parcel, "Imported Parcel " + parcel.getId()));
             newParcel.setFarm(resolvedFarm);
             newParcel.setActive(true);
             newParcel.setStartValidity(now);
@@ -421,7 +475,12 @@ public class ImportedParcelService {
         importRecordRepository.delete(importRecord);
     }
 
-    // Helper method to convert entity to DTO
+    /** Returns sourceName when set, otherwise falls back to the provided default. */
+    private String resolveParcelName(ImportedParcel ip, String fallback) {
+        return (ip.getSourceName() != null && !ip.getSourceName().isBlank())
+                ? ip.getSourceName() : fallback;
+    }
+
     private ImportedParcelDto toImportedParcelDto(ImportedParcel parcel) {
         ImportedParcelDto dto = new ImportedParcelDto();
         dto.setId(parcel.getId());
@@ -438,15 +497,22 @@ public class ImportedParcelService {
             dto.setConvertedParcelId(parcel.getParcel().getId());
         }
 
-        // Convert geometry to WKT
         if (parcel.getGeodata() != null) {
             try {
-                String wkt = wktWriter.write(parcel.getGeodata());
-                dto.setGeodata(wkt);
+                dto.setGeodata(wktWriter.write(parcel.getGeodata()));
             } catch (Exception e) {
                 dto.setGeodata(null);
             }
         }
+
+        dto.setSourceName(parcel.getSourceName());
+        dto.setSourceCode(parcel.getSourceCode());
+        dto.setSourceBlockCode(parcel.getSourceBlockCode());
+        dto.setCultureCode(parcel.getCultureCode());
+        dto.setCultureLabel(parcel.getCultureLabel());
+        dto.setDeclaredAreaHa(parcel.getDeclaredAreaHa());
+        dto.setSourceGuid(parcel.getSourceGuid());
+        dto.setCampaignYear(parcel.getCampaignYear());
 
         return dto;
     }

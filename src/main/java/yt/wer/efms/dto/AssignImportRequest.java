@@ -5,6 +5,8 @@ public class AssignImportRequest {
     private String parcelNamePrefix;
     private String defaultColor;
     private Boolean convertOnlyApproved = true;
+    /** When true, parcels sharing a sourceBlockCode are grouped under a parent block parcel. */
+    private Boolean groupByBlock = false;
 
     public Long getFarmId() {
         return farmId;
@@ -36,5 +38,13 @@ public class AssignImportRequest {
 
     public void setConvertOnlyApproved(Boolean convertOnlyApproved) {
         this.convertOnlyApproved = convertOnlyApproved;
+    }
+
+    public Boolean getGroupByBlock() {
+        return groupByBlock;
+    }
+
+    public void setGroupByBlock(Boolean groupByBlock) {
+        this.groupByBlock = groupByBlock;
     }
 }
