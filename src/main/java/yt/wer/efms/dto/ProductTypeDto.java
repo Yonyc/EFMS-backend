@@ -5,6 +5,7 @@ public class ProductTypeDto {
     private String name;
     private Long unitId;
     private Long farmId;
+    private boolean seedType;
 
     public ProductTypeDto() {}
 
@@ -32,4 +33,7 @@ public class ProductTypeDto {
 
     public Long getFarmId() { return farmId; }
     public void setFarmId(Long farmId) { this.farmId = farmId; }
+
+    public boolean isSeedType() { return seedType; }
+    public void setSeedType(boolean seedType) { this.seedType = seedType; }
 }

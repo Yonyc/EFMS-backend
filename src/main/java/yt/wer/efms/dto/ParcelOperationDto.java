@@ -15,6 +15,10 @@ public class ParcelOperationDto {
     private List<AttachmentDto> attachments;
     private Long parcelId;
     private String parcelName;
+    private List<Long> parcelIds;
+    private List<String> parcelNames;
+    private Long periodId;
+    private String periodName;
 
     public ParcelOperationDto() {}
 
@@ -62,4 +66,29 @@ public class ParcelOperationDto {
 
     public String getParcelName() { return parcelName; }
     public void setParcelName(String parcelName) { this.parcelName = parcelName; }
+
+    public List<Long> getParcelIds() { return parcelIds; }
+    public void setParcelIds(List<Long> parcelIds) { this.parcelIds = parcelIds; }
+
+    public List<String> getParcelNames() { return parcelNames; }
+    public void setParcelNames(List<String> parcelNames) { this.parcelNames = parcelNames; }
+
+    public Long getPeriodId() { return periodId; }
+    public void setPeriodId(Long periodId) { this.periodId = periodId; }
+
+    public String getPeriodName() { return periodName; }
+    public void setPeriodName(String periodName) { this.periodName = periodName; }
+
+    private String cultureCode;
+    private String cultureLabel;
+    private Long cultureCodeId;
+
+    public String getCultureCode() { return cultureCode; }
+    public void setCultureCode(String cultureCode) { this.cultureCode = cultureCode; }
+
+    public String getCultureLabel() { return cultureLabel; }
+    public void setCultureLabel(String cultureLabel) { this.cultureLabel = cultureLabel; }
+
+    public Long getCultureCodeId() { return cultureCodeId; }
+    public void setCultureCodeId(Long cultureCodeId) { this.cultureCodeId = cultureCodeId; }
 }

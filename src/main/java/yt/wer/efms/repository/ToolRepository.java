@@ -9,10 +9,12 @@ import org.springframework.stereotype.Repository;
 import yt.wer.efms.model.Tool;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ToolRepository extends JpaRepository<Tool, Long> {
 	List<Tool> findByFarmId(Long farmId);
+	Optional<Tool> findByFarmIdAndSourceGuid(Long farmId, String sourceGuid);
 	Page<Tool> findByFarmId(Long farmId, Pageable pageable);
 
 	@Query("SELECT t FROM Tool t WHERE t.farm.id = :farmId " +
@@ -22,4 +24,10 @@ public interface ToolRepository extends JpaRepository<Tool, Long> {
 							@Param("query") String query,
 							@Param("categoryId") Long categoryId,
 							Pageable pageable);
+
+	List<Tool> findByImportRecordId(Long importRecordId);
+	void deleteByImportRecordId(Long importRecordId);
+	List<Tool> findBySourceFileId(Long sourceFileId);
+	void deleteBySourceFileId(Long sourceFileId);
+	Optional<Tool> findByImportRecordIdAndSourceGuid(Long importRecordId, String sourceGuid);
 }

@@ -86,7 +86,7 @@ public class OfficialProductService {
                 .sorted(Comparator.comparing(LabeledValue::label))
                 .collect(Collectors.toList());
 
-        // Product types are stored as comma-separated strings — split and deduplicate
+        // Product types are stored as comma-separated strings
         Map<String, String> typesMap = new java.util.LinkedHashMap<>();
         for (Object[] row : productRepository.findDistinctProductTypePairs()) {
             String codes = (String) row[0];

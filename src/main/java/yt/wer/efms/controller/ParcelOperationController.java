@@ -153,6 +153,8 @@ public class ParcelOperationController {
                     .map(dto -> ResponseEntity.created(URI.create("/farm/" + farmId + "/parcels/" + parcelId + "/operations/" + dto.getId()))
                             .body(dto))
                     .orElseGet(() -> ResponseEntity.badRequest().build());
+        } catch (org.springframework.web.server.ResponseStatusException ex) {
+            return ResponseEntity.status(ex.getStatusCode()).body(ex.getReason());
         } catch (RuntimeException ex) {
             String message = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
             if (message.contains("not found")) {

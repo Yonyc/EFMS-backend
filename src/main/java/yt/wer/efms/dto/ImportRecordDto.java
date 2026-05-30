@@ -10,10 +10,9 @@ public class ImportRecordDto {
     private LocalDateTime approvedAt;
     private String username;
     private Integer totalParcels;
-    private Integer pendingParcels;
-    private Integer approvedParcels;
+    private Integer stagedParcels;
+    private Integer liveParcels;
     private Integer rejectedParcels;
-    private Integer convertedParcels;
 
     public ImportRecordDto() {}
 
@@ -38,15 +37,12 @@ public class ImportRecordDto {
     public Integer getTotalParcels() { return totalParcels; }
     public void setTotalParcels(Integer totalParcels) { this.totalParcels = totalParcels; }
 
-    public Integer getPendingParcels() { return pendingParcels; }
-    public void setPendingParcels(Integer pendingParcels) { this.pendingParcels = pendingParcels; }
+    public Integer getStagedParcels() { return stagedParcels; }
+    public void setStagedParcels(Integer stagedParcels) { this.stagedParcels = stagedParcels; }
 
-    public Integer getApprovedParcels() { return approvedParcels; }
-    public void setApprovedParcels(Integer approvedParcels) { this.approvedParcels = approvedParcels; }
+    public Integer getLiveParcels() { return liveParcels; }
+    public void setLiveParcels(Integer liveParcels) { this.liveParcels = liveParcels; }
 
     public Integer getRejectedParcels() { return rejectedParcels; }
     public void setRejectedParcels(Integer rejectedParcels) { this.rejectedParcels = rejectedParcels; }
-
-    public Integer getConvertedParcels() { return convertedParcels; }
-    public void setConvertedParcels(Integer convertedParcels) { this.convertedParcels = convertedParcels; }
 }

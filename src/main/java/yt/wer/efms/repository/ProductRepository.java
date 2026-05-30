@@ -14,6 +14,7 @@ import java.util.Optional;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 	List<Product> findByFarmId(Long farmId);
+	Optional<Product> findByFarmIdAndSourceGuid(Long farmId, String sourceGuid);
 	Page<Product> findByFarmId(Long farmId, Pageable pageable);
 
 	List<Product> findByOfficialTrueAndOfficialCurrentTrue();
@@ -74,4 +75,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 							   @Param("unitId") Long unitId,
 							   @Param("defaultOpTypeId") Long defaultOpTypeId,
 							   Pageable pageable);
+
+	List<Product> findByImportRecordId(Long importRecordId);
+	void deleteByImportRecordId(Long importRecordId);
+	List<Product> findBySourceFileId(Long sourceFileId);
+	void deleteBySourceFileId(Long sourceFileId);
+	Optional<Product> findByImportRecordIdAndSourceGuid(Long importRecordId, String sourceGuid);
 }

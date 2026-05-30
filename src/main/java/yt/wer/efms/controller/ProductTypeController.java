@@ -33,7 +33,6 @@ public class ProductTypeController {
         this.permissionService = permissionService;
     }
 
-    /** Returns global product types, or global + farm-specific if farmId supplied. */
     @GetMapping("/product-types")
     public ResponseEntity<List<ProductTypeDto>> listProductTypes(
             @RequestParam(required = false) Long farmId) {
@@ -46,7 +45,6 @@ public class ProductTypeController {
         return ResponseEntity.ok(types);
     }
 
-    /** Admin: create a global product type. */
     @PostMapping("/product-types")
     public ResponseEntity<ProductTypeDto> createProductType(@RequestBody ProductTypeDto input) {
         if (!permissionService.isCurrentUserAdmin()) {
@@ -57,6 +55,7 @@ public class ProductTypeController {
         }
         ProductType type = new ProductType();
         type.setName(input.getName().trim());
+        type.setSeedType(input.isSeedType());
         type.setCreatedAt(LocalDateTime.now());
         type.setModifiedAt(LocalDateTime.now());
         if (input.getUnitId() != null) {
@@ -65,7 +64,6 @@ public class ProductTypeController {
         return ResponseEntity.ok(toDto(productTypeRepository.save(type)));
     }
 
-    /** Admin: update a global product type. */
     @PutMapping("/product-types/{id}")
     public ResponseEntity<ProductTypeDto> updateProductType(@PathVariable Long id,
                                                             @RequestBody ProductTypeDto input) {
@@ -76,6 +74,7 @@ public class ProductTypeController {
             if (input.getName() != null && !input.getName().trim().isEmpty()) {
                 type.setName(input.getName().trim());
             }
+            type.setSeedType(input.isSeedType());
             if (input.getUnitId() != null) {
                 unitRepository.findById(input.getUnitId()).ifPresent(type::setUnit);
             } else {
@@ -86,7 +85,6 @@ public class ProductTypeController {
         }).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    /** Admin: delete a product type. */
     @DeleteMapping("/product-types/{id}")
     public ResponseEntity<Void> deleteProductType(@PathVariable Long id) {
         if (!permissionService.isCurrentUserAdmin()) {
@@ -99,7 +97,6 @@ public class ProductTypeController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Admin: promote a farm-specific product type to global. */
     @PostMapping("/product-types/{id}/promote")
     public ResponseEntity<ProductTypeDto> promoteProductType(@PathVariable Long id) {
         if (!permissionService.isCurrentUserAdmin()) {
@@ -113,8 +110,10 @@ public class ProductTypeController {
     }
 
     private ProductTypeDto toDto(ProductType t) {
-        return new ProductTypeDto(t.getId(), t.getName(),
+        ProductTypeDto dto = new ProductTypeDto(t.getId(), t.getName(),
                 t.getUnit() != null ? t.getUnit().getId() : null,
                 t.getFarm() != null ? t.getFarm().getId() : null);
+        dto.setSeedType(t.isSeedType());
+        return dto;
     }
 }

@@ -15,10 +15,10 @@ public class CorsConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // Allow all origins (for development - restrict in production)
+        // Allow all origins (for development
         configuration.setAllowedOriginPatterns(Arrays.asList("*"));
         
-        // Allow specific origins (uncomment and configure for production)
+        // Allow specific origins
         // configuration.setAllowedOrigins(Arrays.asList(
         //     "http://localhost:3000",
         //     "http://localhost:4200",
@@ -31,7 +31,7 @@ public class CorsConfig {
         // Allow all headers
         configuration.setAllowedHeaders(Arrays.asList("*"));
         
-        // Allow credentials (cookies, authorization headers)
+        // Allow credentials
         configuration.setAllowCredentials(true);
         
         // Expose headers that clients can access

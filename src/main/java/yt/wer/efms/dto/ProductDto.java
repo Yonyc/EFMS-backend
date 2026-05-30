@@ -7,6 +7,9 @@ public class ProductDto {
     private Long id;
     private String name;
     private Long productTypeId;
+    private Long cultureTypeId;
+    private String cultureTypeName;
+    private String cultureTypeColor;
     private Long unitId;
     private Long farmId;
     private Long defaultOperationTypeId;
@@ -62,6 +65,15 @@ public class ProductDto {
 
     public Long getProductTypeId() { return productTypeId; }
     public void setProductTypeId(Long productTypeId) { this.productTypeId = productTypeId; }
+
+    public Long getCultureTypeId() { return cultureTypeId; }
+    public void setCultureTypeId(Long cultureTypeId) { this.cultureTypeId = cultureTypeId; }
+
+    public String getCultureTypeName() { return cultureTypeName; }
+    public void setCultureTypeName(String cultureTypeName) { this.cultureTypeName = cultureTypeName; }
+
+    public String getCultureTypeColor() { return cultureTypeColor; }
+    public void setCultureTypeColor(String cultureTypeColor) { this.cultureTypeColor = cultureTypeColor; }
 
     public Long getUnitId() { return unitId; }
     public void setUnitId(Long unitId) { this.unitId = unitId; }

@@ -10,4 +10,6 @@ import java.util.List;
 public interface ProductTypeRepository extends JpaRepository<ProductType, Long> {
     List<ProductType> findByFarmIsNullOrderByIdAsc();
     List<ProductType> findByFarmIsNullOrFarmIdOrderByIdAsc(Long farmId);
+    boolean existsByNameAndFarmIsNull(String name);
+    java.util.Optional<ProductType> findFirstByNameAndFarmIsNull(String name);
 }

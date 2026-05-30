@@ -98,12 +98,39 @@ public class Product {
     private ProductType productType;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "culture_type_id")
+    private CultureType cultureType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "unit")
     private Unit unit;
+
+    @Column(name = "source_guid")
+    private String sourceGuid;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "farm")
     private Farm farm;
+
+    @Column(name = "import_code")
+    private String importCode;
+    @Column(name = "import_botanical_species")
+    private String importBotanicalSpecies;
+
+    @Column(name = "import_unit_symbol", length = 32)
+    private String importUnitSymbol;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "import_id")
+    private ImportRecord importRecord;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private ParcelStatus status = ParcelStatus.LIVE;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_file_id")
+    private ImportSourceFile sourceFile;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "default_operation_type_id")
@@ -119,111 +146,355 @@ public class Product {
     @Column(name = "picture_url", length = 2048)
     private String pictureUrl;
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public LocalDateTime getModifiedAt() { return modifiedAt; }
-    public void setModifiedAt(LocalDateTime modifiedAt) { this.modifiedAt = modifiedAt; }
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 
-    public Boolean getOfficial() { return official; }
-    public void setOfficial(Boolean official) { this.official = official; }
+    public LocalDateTime getModifiedAt() {
+        return modifiedAt;
+    }
 
-    public Boolean getOfficialCurrent() { return officialCurrent; }
-    public void setOfficialCurrent(Boolean officialCurrent) { this.officialCurrent = officialCurrent; }
+    public void setModifiedAt(LocalDateTime modifiedAt) {
+        this.modifiedAt = modifiedAt;
+    }
 
-    public String getOfficialAuthNumber() { return officialAuthNumber; }
-    public void setOfficialAuthNumber(String officialAuthNumber) { this.officialAuthNumber = officialAuthNumber; }
+    public String getName() {
+        return name;
+    }
 
-    public String getOfficialVersionTag() { return officialVersionTag; }
-    public void setOfficialVersionTag(String officialVersionTag) { this.officialVersionTag = officialVersionTag; }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-    public String getOfficialDecisionCode() { return officialDecisionCode; }
-    public void setOfficialDecisionCode(String officialDecisionCode) { this.officialDecisionCode = officialDecisionCode; }
+    public Boolean getOfficial() {
+        return official;
+    }
 
-    public String getOfficialDecisionCodeEn() { return officialDecisionCodeEn; }
-    public void setOfficialDecisionCodeEn(String officialDecisionCodeEn) { this.officialDecisionCodeEn = officialDecisionCodeEn; }
+    public void setOfficial(Boolean official) {
+        this.official = official;
+    }
 
-    public String getOfficialDateFirstAuthorization() { return officialDateFirstAuthorization; }
-    public void setOfficialDateFirstAuthorization(String officialDateFirstAuthorization) { this.officialDateFirstAuthorization = officialDateFirstAuthorization; }
+    public Boolean getOfficialCurrent() {
+        return officialCurrent;
+    }
 
-    public String getOfficialDateFrom() { return officialDateFrom; }
-    public void setOfficialDateFrom(String officialDateFrom) { this.officialDateFrom = officialDateFrom; }
+    public void setOfficialCurrent(Boolean officialCurrent) {
+        this.officialCurrent = officialCurrent;
+    }
 
-    public String getOfficialDateTo() { return officialDateTo; }
-    public void setOfficialDateTo(String officialDateTo) { this.officialDateTo = officialDateTo; }
+    public String getOfficialAuthNumber() {
+        return officialAuthNumber;
+    }
 
-    public String getOfficialUserGroupCode() { return officialUserGroupCode; }
-    public void setOfficialUserGroupCode(String officialUserGroupCode) { this.officialUserGroupCode = officialUserGroupCode; }
+    public void setOfficialAuthNumber(String officialAuthNumber) {
+        this.officialAuthNumber = officialAuthNumber;
+    }
 
-    public String getOfficialUserGroupEn() { return officialUserGroupEn; }
-    public void setOfficialUserGroupEn(String officialUserGroupEn) { this.officialUserGroupEn = officialUserGroupEn; }
+    public String getOfficialVersionTag() {
+        return officialVersionTag;
+    }
 
-    public String getOfficialFormulationTypeCode() { return officialFormulationTypeCode; }
-    public void setOfficialFormulationTypeCode(String officialFormulationTypeCode) { this.officialFormulationTypeCode = officialFormulationTypeCode; }
+    public void setOfficialVersionTag(String officialVersionTag) {
+        this.officialVersionTag = officialVersionTag;
+    }
 
-    public String getOfficialFormulationTypeEn() { return officialFormulationTypeEn; }
-    public void setOfficialFormulationTypeEn(String officialFormulationTypeEn) { this.officialFormulationTypeEn = officialFormulationTypeEn; }
+    public String getOfficialDecisionCode() {
+        return officialDecisionCode;
+    }
 
-    public String getOfficialProductTypeCodes() { return officialProductTypeCodes; }
-    public void setOfficialProductTypeCodes(String officialProductTypeCodes) { this.officialProductTypeCodes = officialProductTypeCodes; }
+    public void setOfficialDecisionCode(String officialDecisionCode) {
+        this.officialDecisionCode = officialDecisionCode;
+    }
 
-    public String getOfficialProductTypeEn() { return officialProductTypeEn; }
-    public void setOfficialProductTypeEn(String officialProductTypeEn) { this.officialProductTypeEn = officialProductTypeEn; }
+    public String getOfficialDecisionCodeEn() {
+        return officialDecisionCodeEn;
+    }
 
-    public String getOfficialDecisionCodeFr() { return officialDecisionCodeFr; }
-    public void setOfficialDecisionCodeFr(String officialDecisionCodeFr) { this.officialDecisionCodeFr = officialDecisionCodeFr; }
+    public void setOfficialDecisionCodeEn(String officialDecisionCodeEn) {
+        this.officialDecisionCodeEn = officialDecisionCodeEn;
+    }
 
-    public String getOfficialHolderName() { return officialHolderName; }
-    public void setOfficialHolderName(String officialHolderName) { this.officialHolderName = officialHolderName; }
+    public String getOfficialDateFirstAuthorization() {
+        return officialDateFirstAuthorization;
+    }
 
-    public String getOfficialActiveSubstances() { return officialActiveSubstances; }
-    public void setOfficialActiveSubstances(String officialActiveSubstances) { this.officialActiveSubstances = officialActiveSubstances; }
+    public void setOfficialDateFirstAuthorization(String officialDateFirstAuthorization) {
+        this.officialDateFirstAuthorization = officialDateFirstAuthorization;
+    }
 
-    public String getOfficialSaleTo() { return officialSaleTo; }
-    public void setOfficialSaleTo(String officialSaleTo) { this.officialSaleTo = officialSaleTo; }
+    public String getOfficialDateFrom() {
+        return officialDateFrom;
+    }
 
-    public String getOfficialUseToleratedTo() { return officialUseToleratedTo; }
-    public void setOfficialUseToleratedTo(String officialUseToleratedTo) { this.officialUseToleratedTo = officialUseToleratedTo; }
+    public void setOfficialDateFrom(String officialDateFrom) {
+        this.officialDateFrom = officialDateFrom;
+    }
 
-    public String getOfficialProductTypeFr() { return officialProductTypeFr; }
-    public void setOfficialProductTypeFr(String officialProductTypeFr) { this.officialProductTypeFr = officialProductTypeFr; }
+    public String getOfficialDateTo() {
+        return officialDateTo;
+    }
 
-    public String getOfficialUserGroupFr() { return officialUserGroupFr; }
-    public void setOfficialUserGroupFr(String officialUserGroupFr) { this.officialUserGroupFr = officialUserGroupFr; }
+    public void setOfficialDateTo(String officialDateTo) {
+        this.officialDateTo = officialDateTo;
+    }
 
-    public String getOfficialFormulationTypeFr() { return officialFormulationTypeFr; }
-    public void setOfficialFormulationTypeFr(String officialFormulationTypeFr) { this.officialFormulationTypeFr = officialFormulationTypeFr; }
+    public String getOfficialUserGroupCode() {
+        return officialUserGroupCode;
+    }
 
-    public String getOfficialPayloadJson() { return officialPayloadJson; }
-    public void setOfficialPayloadJson(String officialPayloadJson) { this.officialPayloadJson = officialPayloadJson; }
+    public void setOfficialUserGroupCode(String officialUserGroupCode) {
+        this.officialUserGroupCode = officialUserGroupCode;
+    }
 
-    public LocalDateTime getOfficialImportedAt() { return officialImportedAt; }
-    public void setOfficialImportedAt(LocalDateTime officialImportedAt) { this.officialImportedAt = officialImportedAt; }
+    public String getOfficialUserGroupEn() {
+        return officialUserGroupEn;
+    }
 
-    public ProductType getProductType() { return productType; }
-    public void setProductType(ProductType productType) { this.productType = productType; }
+    public void setOfficialUserGroupEn(String officialUserGroupEn) {
+        this.officialUserGroupEn = officialUserGroupEn;
+    }
 
-    public Unit getUnit() { return unit; }
-    public void setUnit(Unit unit) { this.unit = unit; }
+    public String getOfficialFormulationTypeCode() {
+        return officialFormulationTypeCode;
+    }
 
-    public Farm getFarm() { return farm; }
-    public void setFarm(Farm farm) { this.farm = farm; }
+    public void setOfficialFormulationTypeCode(String officialFormulationTypeCode) {
+        this.officialFormulationTypeCode = officialFormulationTypeCode;
+    }
 
-    public OperationType getDefaultOperationType() { return defaultOperationType; }
-    public void setDefaultOperationType(OperationType defaultOperationType) { this.defaultOperationType = defaultOperationType; }
+    public String getOfficialFormulationTypeEn() {
+        return officialFormulationTypeEn;
+    }
 
-    public Tool getOverrideTool() { return overrideTool; }
-    public void setOverrideTool(Tool overrideTool) { this.overrideTool = overrideTool; }
+    public void setOfficialFormulationTypeEn(String officialFormulationTypeEn) {
+        this.officialFormulationTypeEn = officialFormulationTypeEn;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getOfficialProductTypeCodes() {
+        return officialProductTypeCodes;
+    }
 
-    public String getPictureUrl() { return pictureUrl; }
-    public void setPictureUrl(String pictureUrl) { this.pictureUrl = pictureUrl; }
+    public void setOfficialProductTypeCodes(String officialProductTypeCodes) {
+        this.officialProductTypeCodes = officialProductTypeCodes;
+    }
+
+    public String getOfficialProductTypeEn() {
+        return officialProductTypeEn;
+    }
+
+    public void setOfficialProductTypeEn(String officialProductTypeEn) {
+        this.officialProductTypeEn = officialProductTypeEn;
+    }
+
+    public String getOfficialDecisionCodeFr() {
+        return officialDecisionCodeFr;
+    }
+
+    public void setOfficialDecisionCodeFr(String officialDecisionCodeFr) {
+        this.officialDecisionCodeFr = officialDecisionCodeFr;
+    }
+
+    public String getOfficialHolderName() {
+        return officialHolderName;
+    }
+
+    public void setOfficialHolderName(String officialHolderName) {
+        this.officialHolderName = officialHolderName;
+    }
+
+    public String getOfficialActiveSubstances() {
+        return officialActiveSubstances;
+    }
+
+    public void setOfficialActiveSubstances(String officialActiveSubstances) {
+        this.officialActiveSubstances = officialActiveSubstances;
+    }
+
+    public String getOfficialSaleTo() {
+        return officialSaleTo;
+    }
+
+    public void setOfficialSaleTo(String officialSaleTo) {
+        this.officialSaleTo = officialSaleTo;
+    }
+
+    public String getOfficialUseToleratedTo() {
+        return officialUseToleratedTo;
+    }
+
+    public void setOfficialUseToleratedTo(String officialUseToleratedTo) {
+        this.officialUseToleratedTo = officialUseToleratedTo;
+    }
+
+    public String getOfficialProductTypeFr() {
+        return officialProductTypeFr;
+    }
+
+    public void setOfficialProductTypeFr(String officialProductTypeFr) {
+        this.officialProductTypeFr = officialProductTypeFr;
+    }
+
+    public String getOfficialUserGroupFr() {
+        return officialUserGroupFr;
+    }
+
+    public void setOfficialUserGroupFr(String officialUserGroupFr) {
+        this.officialUserGroupFr = officialUserGroupFr;
+    }
+
+    public String getOfficialFormulationTypeFr() {
+        return officialFormulationTypeFr;
+    }
+
+    public void setOfficialFormulationTypeFr(String officialFormulationTypeFr) {
+        this.officialFormulationTypeFr = officialFormulationTypeFr;
+    }
+
+    public String getOfficialPayloadJson() {
+        return officialPayloadJson;
+    }
+
+    public void setOfficialPayloadJson(String officialPayloadJson) {
+        this.officialPayloadJson = officialPayloadJson;
+    }
+
+    public LocalDateTime getOfficialImportedAt() {
+        return officialImportedAt;
+    }
+
+    public void setOfficialImportedAt(LocalDateTime officialImportedAt) {
+        this.officialImportedAt = officialImportedAt;
+    }
+
+    public ProductType getProductType() {
+        return productType;
+    }
+
+    public void setProductType(ProductType productType) {
+        this.productType = productType;
+    }
+
+    public CultureType getCultureType() {
+        return cultureType;
+    }
+
+    public void setCultureType(CultureType cultureType) {
+        this.cultureType = cultureType;
+    }
+
+    public Unit getUnit() {
+        return unit;
+    }
+
+    public void setUnit(Unit unit) {
+        this.unit = unit;
+    }
+
+    public String getSourceGuid() {
+        return sourceGuid;
+    }
+
+    public void setSourceGuid(String sourceGuid) {
+        this.sourceGuid = sourceGuid;
+    }
+
+    public Farm getFarm() {
+        return farm;
+    }
+
+    public void setFarm(Farm farm) {
+        this.farm = farm;
+    }
+
+    public OperationType getDefaultOperationType() {
+        return defaultOperationType;
+    }
+
+    public void setDefaultOperationType(OperationType defaultOperationType) {
+        this.defaultOperationType = defaultOperationType;
+    }
+
+    public Tool getOverrideTool() {
+        return overrideTool;
+    }
+
+    public void setOverrideTool(Tool overrideTool) {
+        this.overrideTool = overrideTool;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getPictureUrl() {
+        return pictureUrl;
+    }
+
+    public void setPictureUrl(String pictureUrl) {
+        this.pictureUrl = pictureUrl;
+    }
+
+    public String getImportCode() {
+        return importCode;
+    }
+
+    public void setImportCode(String importCode) {
+        this.importCode = importCode;
+    }
+
+    public String getImportBotanicalSpecies() {
+        return importBotanicalSpecies;
+    }
+
+    public void setImportBotanicalSpecies(String importBotanicalSpecies) {
+        this.importBotanicalSpecies = importBotanicalSpecies;
+    }
+
+    public String getImportUnitSymbol() {
+        return importUnitSymbol;
+    }
+
+    public void setImportUnitSymbol(String importUnitSymbol) {
+        this.importUnitSymbol = importUnitSymbol;
+    }
+
+    public ImportRecord getImportRecord() {
+        return importRecord;
+    }
+
+    public void setImportRecord(ImportRecord importRecord) {
+        this.importRecord = importRecord;
+    }
+
+    public ParcelStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ParcelStatus status) {
+        this.status = status;
+    }
+
+    public ImportSourceFile getSourceFile() {
+        return sourceFile;
+    }
+
+    public void setSourceFile(ImportSourceFile sourceFile) {
+        this.sourceFile = sourceFile;
+    }
 }

@@ -15,6 +15,9 @@ import yt.wer.efms.model.OperationProduct;
 import yt.wer.efms.model.OperationType;
 import yt.wer.efms.model.Parcel;
 import yt.wer.efms.model.ParcelOperation;
+import yt.wer.efms.model.ParcelPeriod;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import yt.wer.efms.model.Product;
 import yt.wer.efms.model.Tool;
 import yt.wer.efms.model.Unit;
@@ -55,6 +58,8 @@ public class ParcelOperationService {
     private final EmailService emailService;
     private final FarmOperationTypeDefaultToolRepository farmOpTypeDefaultRepository;
     private final AttachmentRepository attachmentRepository;
+    private final yt.wer.efms.repository.ParcelPeriodRepository parcelPeriodRepository;
+    private final yt.wer.efms.repository.CultureCodeRepository cultureCodeRepository;
 
     public ParcelOperationService(ParcelOperationRepository parcelOperationRepository,
                                   ParcelRepository parcelRepository,
@@ -70,7 +75,10 @@ public class ParcelOperationService {
                                   UserRepository userRepository,
                                   EmailService emailService,
                                   FarmOperationTypeDefaultToolRepository farmOpTypeDefaultRepository,
-                                  AttachmentRepository attachmentRepository) {
+                                  AttachmentRepository attachmentRepository,
+                                  yt.wer.efms.repository.ParcelPeriodRepository parcelPeriodRepository,
+                                  yt.wer.efms.repository.CultureCodeRepository cultureCodeRepository) {
+        this.cultureCodeRepository = cultureCodeRepository;
         this.parcelOperationRepository = parcelOperationRepository;
         this.parcelRepository = parcelRepository;
         this.operationTypeRepository = operationTypeRepository;
@@ -86,6 +94,7 @@ public class ParcelOperationService {
         this.emailService = emailService;
         this.farmOpTypeDefaultRepository = farmOpTypeDefaultRepository;
         this.attachmentRepository = attachmentRepository;
+        this.parcelPeriodRepository = parcelPeriodRepository;
     }
 
     private void sendOperationAlert(Farm farm, String actionType, String details) {
@@ -162,10 +171,18 @@ public class ParcelOperationService {
                 });
     }
 
+    /**
+     * Lists a farm's operations, paged and newest first, with optional parcel/type/date filters.
+     * Access is scoped to the parcels the caller can see: full-farm viewers get everything, while
+     * shared users get only operations on their shared parcels.
+     */
     public Page<ParcelOperationDto> listOperationsForFarm(Long farmId, Long parcelId, Long typeId,
                                                           LocalDateTime dateFrom, LocalDateTime dateTo,
                                                           Pageable pageable) {
-        requireFarmView(farmId);
+        Set<Long> accessibleParcelIds = farmService.accessibleParcelIdsOrNull(farmId, null);
+        if (accessibleParcelIds != null && accessibleParcelIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
 
         org.springframework.data.jpa.domain.Specification<ParcelOperation> spec = (root, query, cb) -> {
             jakarta.persistence.criteria.Join<ParcelOperation, Parcel> parcelJoin =
@@ -174,6 +191,9 @@ public class ParcelOperationService {
             java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
             predicates.add(cb.equal(parcelJoin.get("farm").get("id"), farmId));
             predicates.add(cb.isNull(root.get("deletedAt")));
+            if (accessibleParcelIds != null) {
+                predicates.add(parcelJoin.get("id").in(accessibleParcelIds));
+            }
             if (parcelId != null) predicates.add(cb.equal(parcelJoin.get("id"), parcelId));
             if (typeId  != null) predicates.add(cb.equal(root.get("type").get("id"), typeId));
             if (dateFrom != null) predicates.add(cb.greaterThanOrEqualTo(root.get("date"), dateFrom));
@@ -324,10 +344,35 @@ public class ParcelOperationService {
             operation.setType(type);
         }
 
-        operation.setParcels(Set.of(parcel));
+        Set<Parcel> linkedParcels = new java.util.HashSet<>();
+        linkedParcels.add(parcel);
+        if (request.getParcelIds() != null) {
+            for (Long extraId : request.getParcelIds()) {
+                if (extraId.equals(parcelId)) continue;
+                Parcel extra = parcelRepository.findById(extraId)
+                        .orElseThrow(() -> new RuntimeException("Parcel not found: " + extraId));
+                if (extra.getFarm() == null || !extra.getFarm().getId().equals(farmId)) {
+                    throw new RuntimeException("Parcel does not belong to this farm: " + extraId);
+                }
+                linkedParcels.add(extra);
+            }
+        }
+        operation.setParcels(linkedParcels);
+
+        if (request.getParcelPeriodId() != null) {
+            parcelPeriodRepository.findById(request.getParcelPeriodId())
+                    .ifPresent(operation::setParcelPeriod);
+        }
+        if (operation.getParcelPeriod() == null) {
+            ParcelPeriod resolved = resolveParcelPeriodForDate(parcel, operation.getDate());
+            if (resolved != null) operation.setParcelPeriod(resolved);
+        }
+
+        requireParcelsActiveForPeriod(linkedParcels, operation.getParcelPeriod(), operation.getDate());
 
         ParcelOperation saved = parcelOperationRepository.save(operation);
 
+        yt.wer.efms.model.CultureType seedCulture = null;
         if (request.getProducts() != null && !request.getProducts().isEmpty()) {
             for (OperationProductInput input : request.getProducts()) {
                 if (input.getProductId() == null) {
@@ -337,6 +382,10 @@ public class ParcelOperationService {
                         .orElseThrow(() -> new RuntimeException("Product not found"));
                 if (product.getFarm() != null && !product.getFarm().getId().equals(farm.getId())) {
                     throw new RuntimeException("Product does not belong to this farm");
+                }
+                if (seedCulture == null && product.getProductType() != null
+                        && product.getProductType().isSeedType() && product.getCultureType() != null) {
+                    seedCulture = product.getCultureType();
                 }
                 OperationProduct opProduct = new OperationProduct();
                 opProduct.setOperation(saved);
@@ -363,6 +412,8 @@ public class ParcelOperationService {
                 operationProductRepository.save(opProduct);
             }
         }
+
+        applySeedCulture(seedCulture, linkedParcels, operation.getDate());
 
         if (farm.isEnableOperationAlerts()) {
             String opTypeName = saved.getType() != null ? saved.getType().getName() : "General Operation";
@@ -408,6 +459,30 @@ public class ParcelOperationService {
                     .orElseThrow(() -> new RuntimeException("Operation type not found"));
             operation.setType(type);
         }
+        if (request.getParcelIds() != null && !request.getParcelIds().isEmpty()) {
+            Set<Parcel> linkedParcels = new java.util.HashSet<>();
+            linkedParcels.add(parcel);
+            for (Long extraId : request.getParcelIds()) {
+                if (extraId.equals(parcelId)) continue;
+                Parcel extra = parcelRepository.findById(extraId)
+                        .orElseThrow(() -> new RuntimeException("Parcel not found: " + extraId));
+                if (extra.getFarm() == null || !extra.getFarm().getId().equals(farmId)) {
+                    throw new RuntimeException("Parcel does not belong to this farm: " + extraId);
+                }
+                linkedParcels.add(extra);
+            }
+            operation.setParcels(linkedParcels);
+        }
+        if (request.getParcelPeriodId() != null) {
+            parcelPeriodRepository.findById(request.getParcelPeriodId())
+                    .ifPresent(operation::setParcelPeriod);
+        }
+        if (operation.getParcelPeriod() == null
+                || (request.getDate() != null && !periodContains(operation.getParcelPeriod(), operation.getDate()))) {
+            ParcelPeriod resolved = resolveParcelPeriodForDate(parcel, operation.getDate());
+            if (resolved != null) operation.setParcelPeriod(resolved);
+        }
+
         operation.setModifiedAt(LocalDateTime.now());
         // Audit
         userRepository.findById(actionUserId).ifPresent(operation::setUpdatedBy);
@@ -515,6 +590,30 @@ public class ParcelOperationService {
                 productDtos
         );
         dto.setAttachments(attachmentDtos);
+
+        if (op.getParcels() != null && !op.getParcels().isEmpty()) {
+            List<Parcel> sortedParcels = op.getParcels().stream()
+                    .sorted(java.util.Comparator.comparing(Parcel::getId))
+                    .collect(Collectors.toList());
+            dto.setParcelIds(sortedParcels.stream().map(Parcel::getId).collect(Collectors.toList()));
+            dto.setParcelNames(sortedParcels.stream().map(Parcel::getName).collect(Collectors.toList()));
+            dto.setParcelId(sortedParcels.get(0).getId());
+            dto.setParcelName(sortedParcels.get(0).getName());
+        }
+
+        if (op.getParcelPeriod() != null) {
+            yt.wer.efms.model.ParcelPeriod pp = op.getParcelPeriod();
+            if (pp.getPeriod() != null) {
+                dto.setPeriodId(pp.getPeriod().getId());
+                dto.setPeriodName(pp.getPeriod().getName());
+            }
+            if (pp.getCultureCode() != null) {
+                dto.setCultureCode(pp.getCultureCode().getCode());
+                dto.setCultureLabel(pp.getCultureCode().getLabel());
+                dto.setCultureCodeId(pp.getCultureCode().getId());
+            }
+        }
+
         return dto;
     }
 
@@ -562,5 +661,85 @@ public class ParcelOperationService {
             throw new RuntimeException("You can only manage operations for farms you can edit");
         }
         return farmRepository.findById(farmId).orElseThrow(() -> new RuntimeException("Farm not found"));
+    }
+
+    /**
+     * Stamps a seed product's culture onto each operated parcel's period at the operation date,
+     * but only where that period has no culture yet. Resolves or
+     * creates the CultureCode from the seed's CultureType; no-op when there is no seed culture.
+     */
+    private void applySeedCulture(yt.wer.efms.model.CultureType seedCulture,
+                                  java.util.Collection<Parcel> parcels, LocalDateTime date) {
+        if (seedCulture == null || seedCulture.getCode() == null || parcels == null) return;
+        yt.wer.efms.model.CultureCode cc = findOrCreateCultureCode(seedCulture.getCode(), seedCulture.getName());
+        if (cc == null) return;
+        for (Parcel parcel : parcels) {
+            ParcelPeriod pp = resolveParcelPeriodForDate(parcel, date);
+            if (pp != null && pp.getCultureCode() == null) {
+                pp.setCultureCode(cc);
+                parcelPeriodRepository.save(pp);
+            }
+        }
+    }
+
+    private yt.wer.efms.model.CultureCode findOrCreateCultureCode(String code, String label) {
+        if (code == null || code.isBlank()) return null;
+        return cultureCodeRepository.findByCode(code).orElseGet(() -> {
+            yt.wer.efms.model.CultureCode cc = new yt.wer.efms.model.CultureCode();
+            cc.setCode(code);
+            cc.setLabel(label);
+            return cultureCodeRepository.save(cc);
+        });
+    }
+
+    /**
+     * Enforce that every targeted parcel is active during the operation's period. A parcel passes
+     * if it has an active ParcelPeriod for the resolved period. Throws with the offending parcel's name otherwise.
+     */
+    private void requireParcelsActiveForPeriod(java.util.Collection<Parcel> parcels,
+                                               ParcelPeriod anchorPeriod, LocalDateTime date) {
+        if (parcels == null || parcels.isEmpty()) return;
+        Long targetPeriodId = (anchorPeriod != null && anchorPeriod.getPeriod() != null)
+                ? anchorPeriod.getPeriod().getId() : null;
+        for (Parcel p : parcels) {
+            List<ParcelPeriod> periods = parcelPeriodRepository.findByParcelId(p.getId());
+            boolean active = periods.stream().anyMatch(pp -> {
+                if (!Boolean.TRUE.equals(pp.getActive())) return false;
+                if (targetPeriodId != null) {
+                    return pp.getPeriod() != null && targetPeriodId.equals(pp.getPeriod().getId());
+                }
+                return periodContains(pp, date);
+            });
+            if (!active) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Parcel \"" + (p.getName() != null ? p.getName() : p.getId())
+                                + "\" is not active during the selected period");
+            }
+        }
+    }
+
+    /**
+     * Returns the parcel's ParcelPeriod whose Period range contains {@code date}, or the parcel's
+     * only ParcelPeriod when it has exactly one. Null if no match.
+     */
+    private ParcelPeriod resolveParcelPeriodForDate(Parcel parcel, LocalDateTime date) {
+        if (parcel == null) return null;
+        List<ParcelPeriod> periods = parcelPeriodRepository.findByParcelId(parcel.getId());
+        if (periods.isEmpty()) return null;
+        if (date == null) return periods.size() == 1 ? periods.get(0) : null;
+        for (ParcelPeriod pp : periods) {
+            if (periodContains(pp, date)) return pp;
+        }
+        return periods.size() == 1 ? periods.get(0) : null;
+    }
+
+    /** True if {@code date} falls within the Period date range. */
+    private boolean periodContains(ParcelPeriod pp, LocalDateTime date) {
+        if (pp == null || pp.getPeriod() == null || date == null) return false;
+        LocalDateTime start = pp.getPeriod().getStartDate();
+        LocalDateTime end = pp.getPeriod().getEndDate();
+        if (start != null && date.isBefore(start)) return false;
+        if (end != null && date.isAfter(end)) return false;
+        return true;
     }
 }

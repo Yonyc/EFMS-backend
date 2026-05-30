@@ -28,9 +28,24 @@ public class Tool {
     @JoinColumn(name = "category")
     private ToolCategory category;
 
+    @Column(name = "source_guid")
+    private String sourceGuid;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "farm")
     private Farm farm;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "import_id")
+    private ImportRecord importRecord;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private ParcelStatus status = ParcelStatus.LIVE;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_file_id")
+    private ImportSourceFile sourceFile;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -47,6 +62,9 @@ public class Tool {
     public ToolCategory getCategory() { return category; }
     public void setCategory(ToolCategory category) { this.category = category; }
 
+    public String getSourceGuid() { return sourceGuid; }
+    public void setSourceGuid(String sourceGuid) { this.sourceGuid = sourceGuid; }
+
     public Farm getFarm() { return farm; }
     public void setFarm(Farm farm) { this.farm = farm; }
 
@@ -55,4 +73,13 @@ public class Tool {
 
     public String getPictureUrl() { return pictureUrl; }
     public void setPictureUrl(String pictureUrl) { this.pictureUrl = pictureUrl; }
+
+    public ImportRecord getImportRecord() { return importRecord; }
+    public void setImportRecord(ImportRecord importRecord) { this.importRecord = importRecord; }
+
+    public ParcelStatus getStatus() { return status; }
+    public void setStatus(ParcelStatus status) { this.status = status; }
+
+    public ImportSourceFile getSourceFile() { return sourceFile; }
+    public void setSourceFile(ImportSourceFile sourceFile) { this.sourceFile = sourceFile; }
 }

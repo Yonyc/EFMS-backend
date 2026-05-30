@@ -28,58 +28,201 @@ public class ParcelOperation {
     private OperationType type;
 
     @ManyToMany
-    @JoinTable(
-        name = "parcels_parcel_operations",
-        joinColumns = @JoinColumn(name = "parcel_operations_parcels"),
-        inverseJoinColumns = @JoinColumn(name = "parcels_id")
-    )
+    @JoinTable(name = "parcels_parcel_operations", joinColumns = @JoinColumn(name = "parcel_operations_parcels"), inverseJoinColumns = @JoinColumn(name = "parcels_id"))
     private Set<Parcel> parcels = new HashSet<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parcel_period_id")
+    private ParcelPeriod parcelPeriod;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "deleted_by")
-    private yt.wer.efms.model.User deletedBy;
+    private User deletedBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
-    private yt.wer.efms.model.User createdBy;
+    private User createdBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "updated_by")
-    private yt.wer.efms.model.User updatedBy;
+    private User updatedBy;
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "import_id")
+    private ImportRecord importRecord;
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private ParcelStatus status = ParcelStatus.LIVE;
 
-    public LocalDateTime getModifiedAt() { return modifiedAt; }
-    public void setModifiedAt(LocalDateTime modifiedAt) { this.modifiedAt = modifiedAt; }
+    @Column(name = "source_parcel_guids", columnDefinition = "TEXT")
+    private String sourceParcelGuids;
 
-    public LocalDateTime getDate() { return date; }
-    public void setDate(LocalDateTime date) { this.date = date; }
+    @Column(name = "source_operation_name")
+    private String sourceOperationName;
 
-    public Integer getDurationSeconds() { return durationSeconds; }
-    public void setDurationSeconds(Integer durationSeconds) { this.durationSeconds = durationSeconds; }
+    @Column(name = "source_operation_category")
+    private String sourceOperationCategory;
 
-    public OperationType getType() { return type; }
-    public void setType(OperationType type) { this.type = type; }
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_file_id")
+    private ImportSourceFile sourceFile;
 
-    public Set<Parcel> getParcels() { return parcels; }
-    public void setParcels(Set<Parcel> parcels) { this.parcels = parcels; }
+    @Column(name = "source_tool_guid")
+    private String sourceToolGuid;
 
-    public LocalDateTime getDeletedAt() { return deletedAt; }
-    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
+    public Long getId() {
+        return id;
+    }
 
-    public yt.wer.efms.model.User getDeletedBy() { return deletedBy; }
-    public void setDeletedBy(yt.wer.efms.model.User deletedBy) { this.deletedBy = deletedBy; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public yt.wer.efms.model.User getCreatedBy() { return createdBy; }
-    public void setCreatedBy(yt.wer.efms.model.User createdBy) { this.createdBy = createdBy; }
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
 
-    public yt.wer.efms.model.User getUpdatedBy() { return updatedBy; }
-    public void setUpdatedBy(yt.wer.efms.model.User updatedBy) { this.updatedBy = updatedBy; }
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getModifiedAt() {
+        return modifiedAt;
+    }
+
+    public void setModifiedAt(LocalDateTime modifiedAt) {
+        this.modifiedAt = modifiedAt;
+    }
+
+    public LocalDateTime getDate() {
+        return date;
+    }
+
+    public void setDate(LocalDateTime date) {
+        this.date = date;
+    }
+
+    public Integer getDurationSeconds() {
+        return durationSeconds;
+    }
+
+    public void setDurationSeconds(Integer durationSeconds) {
+        this.durationSeconds = durationSeconds;
+    }
+
+    public OperationType getType() {
+        return type;
+    }
+
+    public void setType(OperationType type) {
+        this.type = type;
+    }
+
+    public Set<Parcel> getParcels() {
+        return parcels;
+    }
+
+    public void setParcels(Set<Parcel> parcels) {
+        this.parcels = parcels;
+    }
+
+    public ParcelPeriod getParcelPeriod() {
+        return parcelPeriod;
+    }
+
+    public void setParcelPeriod(ParcelPeriod parcelPeriod) {
+        this.parcelPeriod = parcelPeriod;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public User getDeletedBy() {
+        return deletedBy;
+    }
+
+    public void setDeletedBy(User deletedBy) {
+        this.deletedBy = deletedBy;
+    }
+
+    public User getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(User createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public User getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(User updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+
+    public ImportRecord getImportRecord() {
+        return importRecord;
+    }
+
+    public void setImportRecord(ImportRecord importRecord) {
+        this.importRecord = importRecord;
+    }
+
+    public ParcelStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ParcelStatus status) {
+        this.status = status;
+    }
+
+    public String getSourceParcelGuids() {
+        return sourceParcelGuids;
+    }
+
+    public void setSourceParcelGuids(String sourceParcelGuids) {
+        this.sourceParcelGuids = sourceParcelGuids;
+    }
+
+    public String getSourceOperationName() {
+        return sourceOperationName;
+    }
+
+    public void setSourceOperationName(String sourceOperationName) {
+        this.sourceOperationName = sourceOperationName;
+    }
+
+    public String getSourceOperationCategory() {
+        return sourceOperationCategory;
+    }
+
+    public void setSourceOperationCategory(String sourceOperationCategory) {
+        this.sourceOperationCategory = sourceOperationCategory;
+    }
+
+    public ImportSourceFile getSourceFile() {
+        return sourceFile;
+    }
+
+    public void setSourceFile(ImportSourceFile sourceFile) {
+        this.sourceFile = sourceFile;
+    }
+
+    public String getSourceToolGuid() {
+        return sourceToolGuid;
+    }
+
+    public void setSourceToolGuid(String sourceToolGuid) {
+        this.sourceToolGuid = sourceToolGuid;
+    }
 }

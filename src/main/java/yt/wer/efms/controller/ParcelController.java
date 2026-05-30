@@ -15,7 +15,6 @@ public class ParcelController {
     @Autowired
     private FarmService farmService;
 
-    // Get all parcels (across all farms)
     @GetMapping
     public ResponseEntity<List<ParcelDto>> listAllParcels() {
         List<ParcelDto> parcels = farmService.listAllParcels();
@@ -35,5 +34,36 @@ public class ParcelController {
     public ResponseEntity<Void> deleteParcel(@PathVariable Long id) {
         boolean deleted = farmService.deleteParcel(id);
         return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+    }
+
+    @PatchMapping("/{parcelId}/periods/{parcelPeriodId}/active")
+    public ResponseEntity<ParcelDto> setParcelPeriodActive(@PathVariable Long parcelId,
+                                                            @PathVariable Long parcelPeriodId,
+                                                            @RequestBody java.util.Map<String, Boolean> body) {
+        Boolean active = body.get("active");
+        if (active == null) return ResponseEntity.badRequest().build();
+        return ResponseEntity.ok(farmService.setParcelPeriodActive(parcelId, parcelPeriodId, active));
+    }
+
+    @PostMapping("/{parcelId}/periods")
+    public ResponseEntity<ParcelDto> addParcelPeriod(
+            @PathVariable Long parcelId,
+            @RequestBody yt.wer.efms.dto.ParcelPeriodEditRequest body) {
+        return ResponseEntity.ok(farmService.addParcelPeriod(parcelId, body));
+    }
+
+    @PatchMapping("/{parcelId}/periods/{parcelPeriodId}")
+    public ResponseEntity<ParcelDto> updateParcelPeriod(
+            @PathVariable Long parcelId,
+            @PathVariable Long parcelPeriodId,
+            @RequestBody yt.wer.efms.dto.ParcelPeriodEditRequest body) {
+        return ResponseEntity.ok(farmService.updateParcelPeriod(parcelId, parcelPeriodId, body));
+    }
+
+    @DeleteMapping("/{parcelId}/periods/{parcelPeriodId}")
+    public ResponseEntity<ParcelDto> deleteParcelPeriod(
+            @PathVariable Long parcelId,
+            @PathVariable Long parcelPeriodId) {
+        return ResponseEntity.ok(farmService.deleteParcelPeriod(parcelId, parcelPeriodId));
     }
 }

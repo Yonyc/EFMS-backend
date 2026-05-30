@@ -34,6 +34,10 @@ public class OperationProduct {
     @JoinColumn(name = "tool")
     private Tool tool;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "import_id")
+    private ImportRecord importRecord;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -57,4 +61,7 @@ public class OperationProduct {
 
     public Tool getTool() { return tool; }
     public void setTool(Tool tool) { this.tool = tool; }
+
+    public ImportRecord getImportRecord() { return importRecord; }
+    public void setImportRecord(ImportRecord importRecord) { this.importRecord = importRecord; }
 }

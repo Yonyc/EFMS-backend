@@ -11,12 +11,12 @@ import java.util.Optional;
 
 @Repository
 public interface FarmRepository extends JpaRepository<Farm, Long> {
-    // Active farms only (for normal usage)
+    // Active farms only
     List<Farm> findByOwnerUsernameAndDeletedAtIsNull(String username);
     List<Farm> findByIsPublicTrueAndDeletedAtIsNull();
     Page<Farm> findByIsPublicTrueAndDeletedAtIsNull(Pageable pageable);
 
-    // All farms including deleted (for admin)
+    // All farms including deleted
     List<Farm> findByOwnerUsername(String username);
     List<Farm> findByIsPublicTrue();
 

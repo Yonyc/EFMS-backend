@@ -8,6 +8,9 @@ public class CreateParcelOperationRequest {
     private Integer durationSeconds;
     private Long typeId;
     private List<OperationProductInput> products;
+    private List<Long> parcelIds;
+    private Long parcelPeriodId;
+    private Long cultureCodeId;
 
     public LocalDateTime getDate() { return date; }
     public void setDate(LocalDateTime date) { this.date = date; }
@@ -20,4 +23,13 @@ public class CreateParcelOperationRequest {
 
     public List<OperationProductInput> getProducts() { return products; }
     public void setProducts(List<OperationProductInput> products) { this.products = products; }
+
+    public List<Long> getParcelIds() { return parcelIds; }
+    public void setParcelIds(List<Long> parcelIds) { this.parcelIds = parcelIds; }
+
+    public Long getParcelPeriodId() { return parcelPeriodId; }
+    public void setParcelPeriodId(Long parcelPeriodId) { this.parcelPeriodId = parcelPeriodId; }
+
+    public Long getCultureCodeId() { return cultureCodeId; }
+    public void setCultureCodeId(Long cultureCodeId) { this.cultureCodeId = cultureCodeId; }
 }

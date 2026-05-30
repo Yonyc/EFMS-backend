@@ -16,14 +16,19 @@ import java.util.Optional;
 @Repository
 public interface ParcelOperationRepository extends JpaRepository<ParcelOperation, Long>, JpaSpecificationExecutor<ParcelOperation> {
 
-	// Active operations only (for normal usage)
+	// Active operations only
 	@Query("SELECT DISTINCT po FROM ParcelOperation po JOIN po.parcels p WHERE p.id = :parcelId AND po.deletedAt IS NULL ORDER BY po.date DESC")
 	List<ParcelOperation> findDistinctByParcelsIdOrderByDateDesc(@Param("parcelId") Long parcelId);
 
 	@Query("SELECT DISTINCT po FROM ParcelOperation po JOIN po.parcels p WHERE p.id = :parcelId AND po.deletedAt IS NULL ORDER BY po.date DESC")
 	Page<ParcelOperation> findDistinctByParcelsIdOrderByDateDesc(@Param("parcelId") Long parcelId, Pageable pageable);
 
-	// Operations deleted at exact cascade timestamp (for selective restore)
+	// Operations deleted at exact cascade timestamp
 	@Query("SELECT po FROM ParcelOperation po JOIN po.parcels p WHERE p.farm.id = :farmId AND po.deletedAt = :deletedAt")
 	List<ParcelOperation> findByFarmIdAndDeletedAt(@Param("farmId") Long farmId, @Param("deletedAt") LocalDateTime deletedAt);
+
+	List<ParcelOperation> findByImportRecordId(Long importRecordId);
+	void deleteByImportRecordId(Long importRecordId);
+	List<ParcelOperation> findBySourceFileId(Long sourceFileId);
+	void deleteBySourceFileId(Long sourceFileId);
 }

@@ -27,6 +27,10 @@ public class ResearchZoneShareDto {
     private Long claimedUsers;
     private List<String> accessUsernames;
     private LocalDateTime createdAt;
+    private List<String> periodLabels;
+    private List<String> operationTypeLabels;
+    private List<String> toolLabels;
+    private List<String> productLabels;
 
     public ResearchZoneShareDto() {
     }
@@ -252,4 +256,16 @@ public class ResearchZoneShareDto {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
+
+    public List<String> getPeriodLabels() { return periodLabels; }
+    public void setPeriodLabels(List<String> periodLabels) { this.periodLabels = periodLabels; }
+
+    public List<String> getOperationTypeLabels() { return operationTypeLabels; }
+    public void setOperationTypeLabels(List<String> operationTypeLabels) { this.operationTypeLabels = operationTypeLabels; }
+
+    public List<String> getToolLabels() { return toolLabels; }
+    public void setToolLabels(List<String> toolLabels) { this.toolLabels = toolLabels; }
+
+    public List<String> getProductLabels() { return productLabels; }
+    public void setProductLabels(List<String> productLabels) { this.productLabels = productLabels; }
 }

@@ -3,6 +3,7 @@ package yt.wer.efms.dto;
 public class ProductInput {
     private String name;
     private Long productTypeId;
+    private Long cultureTypeId;
     private Long unitId;
     private Long defaultOperationTypeId;
     private Long overrideToolId;
@@ -14,6 +15,9 @@ public class ProductInput {
 
     public Long getProductTypeId() { return productTypeId; }
     public void setProductTypeId(Long productTypeId) { this.productTypeId = productTypeId; }
+
+    public Long getCultureTypeId() { return cultureTypeId; }
+    public void setCultureTypeId(Long cultureTypeId) { this.cultureTypeId = cultureTypeId; }
 
     public Long getUnitId() { return unitId; }
     public void setUnitId(Long unitId) { this.unitId = unitId; }

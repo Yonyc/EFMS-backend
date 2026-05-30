@@ -11,4 +11,6 @@ public interface OperationProductRepository extends JpaRepository<OperationProdu
     List<OperationProduct> findByOperationId(Long operationId);
 
     void deleteByOperationId(Long operationId);
+    void deleteByImportRecordId(Long importRecordId);
+    List<OperationProduct> findByProductId(Long productId);
 }

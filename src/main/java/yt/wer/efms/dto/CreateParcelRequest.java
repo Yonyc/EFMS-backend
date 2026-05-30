@@ -9,7 +9,6 @@ public class CreateParcelRequest {
     private LocalDateTime endValidity;
     private String geodata;
     private String color;
-    private Long correspondingPacId;
     private Long periodId;
     private Long parentParcelId;
 
@@ -32,9 +31,6 @@ public class CreateParcelRequest {
 
     public String getColor() { return color; }
     public void setColor(String color) { this.color = color; }
-
-    public Long getCorrespondingPacId() { return correspondingPacId; }
-    public void setCorrespondingPacId(Long correspondingPacId) { this.correspondingPacId = correspondingPacId; }
 
     public Long getPeriodId() { return periodId; }
     public void setPeriodId(Long periodId) { this.periodId = periodId; }

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import yt.wer.efms.model.OperationType;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface OperationTypeRepository extends JpaRepository<OperationType, Long> {
@@ -14,4 +15,6 @@ public interface OperationTypeRepository extends JpaRepository<OperationType, Lo
     List<OperationType> findByFarmIsNullOrFarmIdOrderByIdAsc(Long farmId);
     Page<OperationType> findByFarmIsNullOrFarmIdOrderByIdAsc(Long farmId, Pageable pageable);
     boolean existsByNameAndFarmIsNull(String name);
+    Optional<OperationType> findByNameAndFarmId(String name, Long farmId);
+    Optional<OperationType> findByNameAndFarmIsNull(String name);
 }

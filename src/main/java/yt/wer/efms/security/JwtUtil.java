@@ -19,7 +19,7 @@ public class JwtUtil {
 
     public JwtUtil(@Value("${jwt.secret:secret-key-please-change}") String secret,
                    @Value("${jwt.validity-ms:86400000}") long validityMs) {
-        // Ensure the secret produces a key of sufficient length for HS256 (32 bytes)
+        // Ensure the secret produces a key of sufficient length for HS256
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         if (keyBytes.length < 32) {
             try {

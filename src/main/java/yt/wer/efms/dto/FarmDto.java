@@ -15,10 +15,12 @@ public class FarmDto {
     private LocalDateTime modifiedAt;
     private Boolean canEdit;
     private Boolean canManage;
+    private Boolean canViewFarm;
     private Boolean enableMemberAlerts;
     private Boolean enableParcelAlerts;
     private Boolean enableOperationAlerts;
     private String alertRecipientEmail;
+    private Long defaultPeriodId;
 
     public FarmDto() {}
 
@@ -94,6 +96,9 @@ public class FarmDto {
     public Boolean getCanManage() { return canManage; }
     public void setCanManage(Boolean canManage) { this.canManage = canManage; }
 
+    public Boolean getCanViewFarm() { return canViewFarm; }
+    public void setCanViewFarm(Boolean canViewFarm) { this.canViewFarm = canViewFarm; }
+
     public Boolean getEnableMemberAlerts() { return enableMemberAlerts; }
     public void setEnableMemberAlerts(Boolean enableMemberAlerts) { this.enableMemberAlerts = enableMemberAlerts; }
 
@@ -105,4 +110,7 @@ public class FarmDto {
 
     public String getAlertRecipientEmail() { return alertRecipientEmail; }
     public void setAlertRecipientEmail(String alertRecipientEmail) { this.alertRecipientEmail = alertRecipientEmail; }
+
+    public Long getDefaultPeriodId() { return defaultPeriodId; }
+    public void setDefaultPeriodId(Long defaultPeriodId) { this.defaultPeriodId = defaultPeriodId; }
 }

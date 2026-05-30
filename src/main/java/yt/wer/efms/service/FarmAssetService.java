@@ -48,6 +48,7 @@ public class FarmAssetService {
     private final ToolCategoryRepository toolCategoryRepository;
     private final OperationTypeRepository operationTypeRepository;
     private final AttachmentRepository attachmentRepository;
+    private final yt.wer.efms.repository.CultureTypeRepository cultureTypeRepository;
     private final PermissionService permissionService;
 
     public FarmAssetService(FarmRepository farmRepository,
@@ -58,6 +59,7 @@ public class FarmAssetService {
                             ToolCategoryRepository toolCategoryRepository,
                             OperationTypeRepository operationTypeRepository,
                             AttachmentRepository attachmentRepository,
+                            yt.wer.efms.repository.CultureTypeRepository cultureTypeRepository,
                             PermissionService permissionService) {
         this.farmRepository = farmRepository;
         this.productRepository = productRepository;
@@ -67,6 +69,7 @@ public class FarmAssetService {
         this.toolCategoryRepository = toolCategoryRepository;
         this.operationTypeRepository = operationTypeRepository;
         this.attachmentRepository = attachmentRepository;
+        this.cultureTypeRepository = cultureTypeRepository;
         this.permissionService = permissionService;
     }
 
@@ -122,6 +125,9 @@ public class FarmAssetService {
                     .orElseThrow(() -> new RuntimeException("Product type not found"));
             p.setProductType(type);
         }
+        if (input.getCultureTypeId() != null) {
+            p.setCultureType(cultureTypeRepository.findById(input.getCultureTypeId()).orElse(null));
+        }
         if (input.getUnitId() != null) {
             Unit unit = unitRepository.findById(input.getUnitId())
                     .orElseThrow(() -> new RuntimeException("Unit not found"));
@@ -154,6 +160,11 @@ public class FarmAssetService {
                 ProductType type = productTypeRepository.findById(input.getProductTypeId())
                         .orElseThrow(() -> new RuntimeException("Product type not found"));
                 existing.setProductType(type);
+            }
+            if (input.getCultureTypeId() != null) {
+                existing.setCultureType(cultureTypeRepository.findById(input.getCultureTypeId()).orElse(null));
+            } else {
+                existing.setCultureType(null);
             }
             if (input.getUnitId() != null) {
                 Unit unit = unitRepository.findById(input.getUnitId())
@@ -267,6 +278,11 @@ public class FarmAssetService {
             p.getCreatedAt(),
             p.getModifiedAt()
         );
+        if (p.getCultureType() != null) {
+            dto.setCultureTypeId(p.getCultureType().getId());
+            dto.setCultureTypeName(p.getCultureType().getName());
+            dto.setCultureTypeColor(p.getCultureType().getColor());
+        }
         dto.setOfficial(p.getOfficial());
         dto.setOfficialCurrent(p.getOfficialCurrent());
         dto.setOfficialAuthNumber(p.getOfficialAuthNumber());

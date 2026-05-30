@@ -29,23 +29,66 @@ public class FarmUser {
     @Column(name = "modified_at")
     private LocalDateTime modifiedAt;
 
-    public FarmUser() {}
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "default_period_id")
+    private Period defaultPeriod;
 
-    public FarmUserId getId() { return id; }
-    public void setId(FarmUserId id) { this.id = id; }
+    public FarmUser() {
+    }
 
-    public Farm getFarm() { return farm; }
-    public void setFarm(Farm farm) { this.farm = farm; }
+    public FarmUserId getId() {
+        return id;
+    }
 
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
+    public void setId(FarmUserId id) {
+        this.id = id;
+    }
 
-    public Role getRole() { return role; }
-    public void setRole(Role role) { this.role = role; }
+    public Farm getFarm() {
+        return farm;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setFarm(Farm farm) {
+        this.farm = farm;
+    }
 
-    public LocalDateTime getModifiedAt() { return modifiedAt; }
-    public void setModifiedAt(LocalDateTime modifiedAt) { this.modifiedAt = modifiedAt; }
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public Role getRole() {
+        return role;
+    }
+
+    public void setRole(Role role) {
+        this.role = role;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getModifiedAt() {
+        return modifiedAt;
+    }
+
+    public void setModifiedAt(LocalDateTime modifiedAt) {
+        this.modifiedAt = modifiedAt;
+    }
+
+    public Period getDefaultPeriod() {
+        return defaultPeriod;
+    }
+
+    public void setDefaultPeriod(Period defaultPeriod) {
+        this.defaultPeriod = defaultPeriod;
+    }
 }

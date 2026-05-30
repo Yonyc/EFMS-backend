@@ -5,10 +5,10 @@ public class ParcelListDto {
     private String name;
     private Boolean active;
     private String color;
+    private String cultureColor;
     private Long farmId;
     private Long periodId;
-    private String validationStatus;
-    private Long convertedParcelId;
+    private String status;
     private Boolean canEdit;
     private Boolean canShare;
 
@@ -26,17 +26,17 @@ public class ParcelListDto {
     public String getColor() { return color; }
     public void setColor(String color) { this.color = color; }
 
+    public String getCultureColor() { return cultureColor; }
+    public void setCultureColor(String cultureColor) { this.cultureColor = cultureColor; }
+
     public Long getFarmId() { return farmId; }
     public void setFarmId(Long farmId) { this.farmId = farmId; }
 
     public Long getPeriodId() { return periodId; }
     public void setPeriodId(Long periodId) { this.periodId = periodId; }
 
-    public String getValidationStatus() { return validationStatus; }
-    public void setValidationStatus(String validationStatus) { this.validationStatus = validationStatus; }
-
-    public Long getConvertedParcelId() { return convertedParcelId; }
-    public void setConvertedParcelId(Long convertedParcelId) { this.convertedParcelId = convertedParcelId; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
     public Boolean getCanEdit() { return canEdit; }
     public void setCanEdit(Boolean canEdit) { this.canEdit = canEdit; }
