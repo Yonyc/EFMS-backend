@@ -118,6 +118,18 @@ public class FarmController {
         return ResponseEntity.ok(parcels);
     }
 
+    @GetMapping("/{id}/parcels/page")
+    public ResponseEntity<org.springframework.data.domain.Page<ParcelDto>> listParcelsPaged(@PathVariable Long id,
+            @RequestParam(required = false) String shareToken,
+            @RequestParam(required = false, defaultValue = "") String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                Math.max(0, page), Math.min(Math.max(1, size), 200),
+                org.springframework.data.domain.Sort.by("id"));
+        return ResponseEntity.ok(farmService.searchParcelsPaged(id, search, shareToken, pageable));
+    }
+
     @GetMapping("/{id}/parcels/viewport")
     public ResponseEntity<List<ParcelDto>> listParcelsViewport(@PathVariable Long id,
             @RequestParam(required = false) String shareToken,
@@ -316,6 +328,11 @@ public class FarmController {
     public ResponseEntity<Void> removeMember(@PathVariable Long id, @PathVariable Long userId) {
         farmService.removeMember(id, userId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/parcel-shares")
+    public ResponseEntity<List<yt.wer.efms.dto.FarmParcelShareDto>> listFarmParcelShares(@PathVariable Long id) {
+        return ResponseEntity.ok(farmService.listFarmParcelShares(id));
     }
 
     @GetMapping("/{id}/parcels/{parcelId}/shares")

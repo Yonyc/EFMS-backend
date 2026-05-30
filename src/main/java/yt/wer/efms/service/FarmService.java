@@ -650,6 +650,22 @@ public class FarmService {
         return parcelSet.stream().map(this::toParcelDto).collect(Collectors.toList());
     }
 
+    public Page<ParcelDto> searchParcelsPaged(Long farmId, String query, String shareToken, Pageable pageable) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
+        String username = permissionService.currentUsername();
+        if (permissionService.canViewFarm(farmId, actionUserId, isAdmin)) {
+            String q = query == null || query.isBlank() ? "" : "%" + query.trim().toLowerCase() + "%";
+            return parcelRepository.searchByFarm(farmId, q, pageable).map(this::toParcelDto);
+        }
+        Set<Parcel> parcelSet = new HashSet<>(expandSharedParcels(farmId, username));
+        List<ResearchZoneShare> activeShares = resolveActiveResearchShares(farmId, username, shareToken);
+        parcelSet.addAll(findParcelsFromResearchShares(farmId, activeShares, null, null, null, null,
+                null, null, null, null, null, null, null));
+        List<ParcelDto> dtos = parcelSet.stream().map(this::toParcelDto).collect(Collectors.toList());
+        return new org.springframework.data.domain.PageImpl<>(dtos, Pageable.unpaged(), dtos.size());
+    }
+
     public List<ParcelListDto> listParcelSummaries(Long farmId, String shareToken) {
         Long actionUserId = permissionService.currentUserId();
         boolean isAdmin = permissionService.isCurrentUserAdmin();
@@ -2161,6 +2177,23 @@ public class FarmService {
         claim.setUser(currentUser);
         claim.setCreatedAt(LocalDateTime.now());
         researchZoneShareClaimRepository.save(claim);
+    }
+
+    public List<yt.wer.efms.dto.FarmParcelShareDto> listFarmParcelShares(Long farmId) {
+        Long actionUserId = permissionService.currentUserId();
+        boolean isAdmin = permissionService.isCurrentUserAdmin();
+        if (!permissionService.canManageFarm(farmId, actionUserId, isAdmin)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view shares for farms you manage");
+        }
+        return parcelShareRepository.findAllByFarmIdWithUserAndParcel(farmId).stream()
+                .map(share -> new yt.wer.efms.dto.FarmParcelShareDto(
+                        share.getParcel().getId(),
+                        share.getParcel().getName(),
+                        share.getUser().getId(),
+                        share.getUser().getUsername(),
+                        share.getRole().name(),
+                        share.isIncludeChildren()))
+                .collect(Collectors.toList());
     }
 
     public List<yt.wer.efms.dto.ParcelShareDto> listParcelShares(Long farmId, Long parcelId) {

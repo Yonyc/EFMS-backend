@@ -21,6 +21,9 @@ public interface ParcelShareRepository extends JpaRepository<ParcelShare, Long> 
     List<ParcelShare> findByUserUsernameAndParcelFarmId(String username, Long farmId);
     void deleteByParcelIdAndUserId(Long parcelId, Long userId);
 
+    @Query("SELECT ps FROM ParcelShare ps JOIN FETCH ps.user JOIN FETCH ps.parcel p WHERE p.farm.id = :farmId")
+    List<ParcelShare> findAllByFarmIdWithUserAndParcel(@Param("farmId") Long farmId);
+
     @Query("SELECT DISTINCT ps.parcel.farm FROM ParcelShare ps WHERE ps.user.username = :username AND ps.parcel.farm.deletedAt IS NULL")
     List<Farm> findDistinctFarmsByUserUsername(@Param("username") String username);
 }

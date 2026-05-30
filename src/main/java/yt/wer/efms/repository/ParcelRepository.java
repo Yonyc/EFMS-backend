@@ -20,9 +20,18 @@ public interface ParcelRepository extends JpaRepository<Parcel, Long> {
 
 	List<Parcel> findByFarmIdAndDeletedAtIsNull(Long farmId);
 
+	@Query("SELECT p FROM Parcel p WHERE p.farm.id = :farmId AND p.deletedAt IS NULL AND (" +
+			":q = '' " +
+			"OR LOWER(p.name) LIKE :q OR LOWER(p.sourceName) LIKE :q OR LOWER(p.sourceCode) LIKE :q " +
+			"OR LOWER(p.municipality) LIKE :q OR LOWER(p.exploitantName) LIKE :q OR LOWER(p.cadastralRef) LIKE :q " +
+			"OR LOWER(p.sourceBlockCode) LIKE :q OR LOWER(p.exploitantCode) LIKE :q " +
+			"OR EXISTS (SELECT 1 FROM ParcelPeriod pp WHERE pp.parcel = p AND LOWER(pp.cultureLabel) LIKE :q)" +
+			")")
+	Page<Parcel> searchByFarm(@Param("farmId") Long farmId, @Param("q") String q, Pageable pageable);
+
 	List<Parcel> findByFarmIdAndParentParcelIdInAndDeletedAtIsNull(Long farmId, java.util.Collection<Long> parentIds);
 
-	// All parcels for a farm – used for cascade operations
+	// All parcels for a farm 
 	List<Parcel> findByFarmId(Long farmId);
 
 	// Parcels deleted at an exact cascade timestamp
