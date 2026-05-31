@@ -112,6 +112,9 @@ public class FarmAssetController {
             String url = farmAssetService.uploadProductPicture(farmId, productId, file);
             return ResponseEntity.ok(Map.of("pictureUrl", url));
         } catch (RuntimeException ex) {
+            if (ex.getMessage() != null && ex.getMessage().contains("picture_upload_failed")) {
+                return ResponseEntity.internalServerError().body(Map.of("error", "picture_upload_failed", "detail", ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage()));
+            }
             return ResponseEntity.status(403).build();
         }
     }
@@ -183,6 +186,9 @@ public class FarmAssetController {
             String url = farmAssetService.uploadToolPicture(farmId, toolId, file);
             return ResponseEntity.ok(Map.of("pictureUrl", url));
         } catch (RuntimeException ex) {
+            if (ex.getMessage() != null && ex.getMessage().contains("picture_upload_failed")) {
+                return ResponseEntity.internalServerError().body(Map.of("error", "picture_upload_failed", "detail", ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage()));
+            }
             return ResponseEntity.status(403).build();
         }
     }

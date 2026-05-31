@@ -17,6 +17,10 @@ WORKDIR /app
 
 # Create a non-root user for security (Debian/Ubuntu syntax, not BusyBox/Alpine)
 RUN groupadd --system spring && useradd --system --gid spring spring
+
+# Create writable uploads directory before switching to non-root user
+RUN mkdir -p /app/uploads/pictures /app/uploads/attachments /app/uploads/avatars && chown -R spring:spring /app/uploads
+
 USER spring:spring
 
 # Copy the built jar from the build stage
