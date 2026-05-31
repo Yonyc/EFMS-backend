@@ -38,8 +38,11 @@ public class FarmController {
     }
 
     @GetMapping
-    public List<FarmDto> list() {
-        return farmService.listAll();
+    public ResponseEntity<List<FarmDto>> list() {
+        if (!permissionService.isCurrentUserAdmin()) {
+            return ResponseEntity.status(403).build();
+        }
+        return ResponseEntity.ok(farmService.listAll());
     }
 
     @GetMapping("/public")
