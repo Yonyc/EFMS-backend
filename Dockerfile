@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM maven:3.9-eclipse-temurin-17-alpine AS build
+FROM maven:3.9-eclipse-temurin-17 AS build
 
 WORKDIR /app
 
@@ -10,13 +10,13 @@ COPY src ./src
 # Build the application (dependencies will be downloaded as needed)
 RUN mvn clean package -DskipTests -B
 
-# Stage 2: Create the runtime image
-FROM eclipse-temurin:17-jre-alpine
+# Stage 2: Create the runtime image (multi-arch glibc/Ubuntu JRE)
+FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-# Create a non-root user for security
-RUN addgroup -S spring && adduser -S spring -G spring
+# Create a non-root user for security (Debian/Ubuntu syntax, not BusyBox/Alpine)
+RUN groupadd --system spring && useradd --system --gid spring spring
 USER spring:spring
 
 # Copy the built jar from the build stage
